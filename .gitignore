@@ -20,6 +20,7 @@ packages/
 *.exe
 *.cache
 *.log
+dist/
 
 # Local research / reverse-engineering scratch space
 .research/
