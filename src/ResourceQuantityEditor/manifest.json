@@ -1,0 +1,12 @@
+{
+  "id": "ResourceQuantityEditor",
+  "version": "0.1.0",
+  "display_name": "Resource Quantity Editor",
+  "description_short": "Console commands for editing product quantities in storages.",
+  "authors": "Ravva",
+  "primary_dlls": [ "ResourceQuantityEditor.dll" ],
+  "primary_mod_class_name": "ResourceQuantityEditor.ResourceQuantityEditor",
+  "non_locking_dll_load": true,
+  "can_add_to_saved_game": true,
+  "can_remove_from_saved_game": true
+}

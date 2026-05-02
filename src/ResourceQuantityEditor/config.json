@@ -1,0 +1,13 @@
+{
+  "allow_replace_non_empty_storage": {
+    "default": false,
+    "description": "Allow rqe_set_storage to replace the assigned product in non-empty storages."
+  },
+  "max_single_operation_amount": {
+    "default": 1000000,
+    "min": 0,
+    "max": 2000000000,
+    "is_integer": true,
+    "description": "Maximum amount accepted by one storage editor command."
+  }
+}

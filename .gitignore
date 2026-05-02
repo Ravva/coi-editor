@@ -1,0 +1,30 @@
+# Build output
+bin/
+obj/
+[Bb]uild/
+[Dd]ebug/
+[Rr]elease/
+
+# Visual Studio / MSBuild
+.vs/
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+*.nupkg
+packages/
+
+# Runtime and generated files
+*.dll
+*.pdb
+*.exe
+*.cache
+*.log
+
+# Local research / reverse-engineering scratch space
+.research/
+.tools/
+
+# OS metadata
+Thumbs.db
+Desktop.ini

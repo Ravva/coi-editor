@@ -1,0 +1,122 @@
+using System;
+using System.Linq;
+using Mafi;
+using Mafi.Core;
+using Mafi.Core.Economy;
+using Mafi.Core.Products;
+using Mafi.Core.Prototypes;
+
+namespace ResourceQuantityEditor {
+
+	public sealed class GlobalResourceEditorService {
+		private readonly IAssetTransactionManager m_assets;
+		private readonly ProtosDb m_protosDb;
+
+		public GlobalResourceEditorService(IAssetTransactionManager assets, ProtosDb protosDb) {
+			m_assets = assets;
+			m_protosDb = protosDb;
+		}
+
+		public string ListGlobalProducts(string filter) {
+			GlobalProductRow[] rows = GetGlobalProducts(filter).Take(250).ToArray();
+			if (rows.Length == 0) {
+				return "No global products found.";
+			}
+
+			return string.Join(
+				Environment.NewLine,
+				rows.Select(x => string.Format("{0} | {1} | available={2}", x.Product.Id, x.Product.Strings.Name, x.Amount)).ToArray());
+		}
+
+		public GlobalProductRow[] GetGlobalProducts(string filter) {
+			string normalizedFilter = (filter ?? string.Empty).Trim();
+			return m_protosDb.All<ProductProto>()
+				.Where(x => x.IsStorable)
+				.Where(x => MatchesFilter(x, normalizedFilter))
+				.Select(x => new GlobalProductRow(x, m_assets.GetAvailableQuantityForRemoval(x).Value))
+				.Where(x => x.Amount > 0 || !string.IsNullOrEmpty(normalizedFilter))
+				.OrderBy(x => x.Product.Id.ToString())
+				.ToArray();
+		}
+
+		public string SetGlobal(string productId, int amount) {
+			ValidateAmount(amount);
+			ProductProto product = GetProduct(productId);
+			int current = m_assets.GetAvailableQuantityForRemoval(product).Value;
+
+			if (amount > current) {
+				StoreViaShipyard(product, amount - current);
+			} else if (amount < current) {
+				m_assets.RemoveAsMuchAs(new ProductQuantity(product, new Quantity(current - amount)), DestroyReason.Cheated);
+			}
+
+			return Format(product, "set");
+		}
+
+		public string AddGlobal(string productId, int amount) {
+			ValidateAmount(amount);
+			ProductProto product = GetProduct(productId);
+			StoreViaShipyard(product, amount);
+			return Format(product, "added");
+		}
+
+		public string RemoveGlobal(string productId, int amount) {
+			ValidateAmount(amount);
+			ProductProto product = GetProduct(productId);
+			m_assets.RemoveAsMuchAs(new ProductQuantity(product, new Quantity(amount)), DestroyReason.Cheated);
+			return Format(product, "removed");
+		}
+
+		private ProductProto GetProduct(string productId) {
+			ProductProto product;
+			if (!m_protosDb.TryGetProto(new ProductProto.ID(productId), out product)) {
+				throw new ArgumentException(
+					string.Format("Product '{0}' was not found. Use rqe_list_products or rqe_list_products <filter> to find product ids.", productId),
+					"productId");
+			}
+
+			return product;
+		}
+
+		private string Format(ProductProto product, string action) {
+			return string.Format(
+				"Global product {0} {1}: available={2}",
+				product.Id,
+				action,
+				m_assets.GetAvailableQuantityForRemoval(product).Value);
+		}
+
+		private void StoreViaShipyard(ProductProto product, int amount) {
+			if (amount <= 0) {
+				return;
+			}
+
+			m_assets.StoreValue(product.Id.ToAssetValue(amount, m_protosDb), CreateReason.Cheated);
+		}
+
+		private static void ValidateAmount(int amount) {
+			if (amount < 0) {
+				throw new ArgumentOutOfRangeException("amount", amount, "Amount must be non-negative.");
+			}
+		}
+
+		private static bool MatchesFilter(ProductProto product, string filter) {
+			if (string.IsNullOrEmpty(filter)) {
+				return true;
+			}
+
+			return product.Id.ToString().IndexOf(filter, StringComparison.OrdinalIgnoreCase) >= 0
+				|| product.Strings.Name.ToString().IndexOf(filter, StringComparison.OrdinalIgnoreCase) >= 0;
+		}
+	}
+
+	public struct GlobalProductRow {
+		public readonly ProductProto Product;
+		public readonly int Amount;
+
+		public GlobalProductRow(ProductProto product, int amount) {
+			Product = product;
+			Amount = amount;
+		}
+	}
+}
