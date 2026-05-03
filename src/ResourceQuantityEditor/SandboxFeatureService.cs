@@ -18,6 +18,7 @@ using Mafi.Core.Products;
 using Mafi.Core.PropertiesDb;
 using Mafi.Core.Prototypes;
 using Mafi.Core.Research;
+using Mafi.Core.SpaceProgram;
 using Mafi.Core.Terrain;
 using Mafi.Core.Terrain.Designation;
 using Mafi.Core.Trains;
@@ -46,6 +47,7 @@ namespace ResourceQuantityEditor {
 		private readonly TerrainManager m_terrainManager;
 		private readonly TerrainDesignationsManager m_terrainDesignationsManager;
 		private readonly SurfaceDesignationsManager m_surfaceDesignationsManager;
+		private readonly AsteroidsManager m_asteroidsManager;
 		private readonly FieldInfo m_landfillPartialField;
 		private readonly FieldInfo m_landfillReportedField;
 		private readonly FieldInfo m_bioWasteField;
@@ -90,7 +92,8 @@ namespace ResourceQuantityEditor {
 			MaintenanceManager maintenanceManager,
 			TerrainManager terrainManager,
 			TerrainDesignationsManager terrainDesignationsManager,
-			SurfaceDesignationsManager surfaceDesignationsManager) {
+			SurfaceDesignationsManager surfaceDesignationsManager,
+			AsteroidsManager asteroidsManager) {
 			m_sandbox = sandbox;
 			m_sourceSink = sourceSink;
 			m_instaBuild = instaBuild;
@@ -109,6 +112,7 @@ namespace ResourceQuantityEditor {
 			m_terrainManager = terrainManager;
 			m_terrainDesignationsManager = terrainDesignationsManager;
 			m_surfaceDesignationsManager = surfaceDesignationsManager;
+			m_asteroidsManager = asteroidsManager;
 			m_landfillPartialField = typeof(Settlement).GetField("m_landfillInSettlementPartial", BindingFlags.Instance | BindingFlags.NonPublic);
 			m_landfillReportedField = typeof(Settlement).GetField("m_landfillInSettlementReported", BindingFlags.Instance | BindingFlags.NonPublic);
 			m_bioWasteField = typeof(Settlement).GetField("m_bioWasteInSettlement", BindingFlags.Instance | BindingFlags.NonPublic);
@@ -647,6 +651,78 @@ namespace ResourceQuantityEditor {
 				.ToArray();
 		}
 
+		public AsteroidMaterialRow[] GetAsteroidMaterialRows(string filter) {
+			string normalizedFilter = (filter ?? string.Empty).Trim();
+			return m_protosDb.All<TerrainMaterialProto>()
+				.Where(x => IsAsteroidMaterial(x))
+				.Where(x => MatchesAsteroidMaterialFilter(x, normalizedFilter))
+				.OrderByDescending(x => x.AsteroidSpawnWeight)
+				.ThenBy(x => x.Id.ToString())
+				.Select(x => new AsteroidMaterialRow(
+					x.MinedProduct,
+					x.Id.ToString(),
+					x.MinedProduct.Strings.Name.ToString(),
+					x.AsteroidSpawnWeight,
+					x.IsAsteroidFillerMaterial))
+				.ToArray();
+		}
+
+		public AsteroidRow[] GetAsteroidRows() {
+			return m_asteroidsManager.AsteroidsActive.AsEnumerable()
+				.OrderBy(x => x.Id.Value)
+				.Select(x => new AsteroidRow(
+					x.Id.Value,
+					GetAsteroidState(x),
+					x.Radius.Value,
+					x.TotalQuantity.ToString(),
+					GetAsteroidMaterialsSummary(x)))
+				.ToArray();
+		}
+
+		public string SpawnAsteroidToOrbit(string material1Id, string material2Id, int radius, int materialRatio) {
+			if (radius <= 0) {
+				throw new ArgumentOutOfRangeException("radius", radius, "Asteroid radius must be positive.");
+			}
+			if (materialRatio <= 0) {
+				throw new ArgumentOutOfRangeException("materialRatio", materialRatio, "Material ratio must be positive.");
+			}
+
+			TerrainMaterialProto material1 = GetAsteroidMaterial(material1Id);
+			Option<TerrainMaterialProto> material2 = string.IsNullOrEmpty((material2Id ?? "").Trim())
+				? Option<TerrainMaterialProto>.None
+				: Option<TerrainMaterialProto>.Some(GetAsteroidMaterial(material2Id));
+
+			EnsureSandboxEnabled(true);
+			Asteroid asteroid = m_asteroidsManager.CheatNewAsteroidToOrbit(
+				new RelTile1i(radius),
+				Option<TerrainMaterialProto>.Some(material1),
+				material2,
+				materialRatio);
+			return "Asteroid #" + asteroid.Id.Value + " created in orbit: " + GetAsteroidMaterialsSummary(asteroid) + ".";
+		}
+
+		public string CaptureAsteroidToOrbit(int asteroidId) {
+			Asteroid asteroid = GetActiveAsteroid(asteroidId);
+			if (asteroid.ReachedOrbit) {
+				return "Asteroid #" + asteroidId + " is already in orbit.";
+			}
+
+			EnsureSandboxEnabled(true);
+			InvokeNonPublicBySuffix(asteroid, "ForcePutToOrbit");
+			return "Asteroid #" + asteroidId + " captured to orbit.";
+		}
+
+		public string DropAsteroidAt(int asteroidId, int x, int y) {
+			Asteroid asteroid = GetActiveAsteroid(asteroidId);
+			if (!asteroid.ReachedOrbit) {
+				InvokeNonPublicBySuffix(asteroid, "ForcePutToOrbit");
+			}
+
+			EnsureSandboxEnabled(true);
+			InvokeNonPublic(m_asteroidsManager, "startAsteroidProcessing", asteroid, new Tile2i(x, y));
+			return "Asteroid #" + asteroidId + " landing started at " + x + ", " + y + ".";
+		}
+
 		public string GetStatus() {
 			return string.Format(
 				"canCheat={0}, source/sink allowed={1}, toolbar={2}, instaBuild={3}, noWorkers={4}, noPower={5}, noComputing={6}, noUnity={7}, noFood={8}, noFuel={9}, noMaintenance={10}, instantConstruction={11}, allResearch={12}",
@@ -732,6 +808,17 @@ namespace ResourceQuantityEditor {
 			return method.Invoke(target, args);
 		}
 
+		private static object InvokeNonPublicBySuffix(object target, string methodNameSuffix, params object[] args) {
+			MethodInfo method = target.GetType()
+				.GetMethods(BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic)
+				.FirstOrDefault(x => x.Name == methodNameSuffix || x.Name.EndsWith("." + methodNameSuffix, StringComparison.Ordinal));
+			if (method == null) {
+				throw new MissingMethodException(target.GetType().FullName, methodNameSuffix);
+			}
+
+			return method.Invoke(target, args);
+		}
+
 		private void EnsureSandboxEnabled(bool enableRequested) {
 			if (enableRequested && !m_sandbox.CanCheat) {
 				InvokeNonPublic(m_sandbox, "enableSandbox");
@@ -777,6 +864,61 @@ namespace ResourceQuantityEditor {
 				throw new ArgumentException("Weather '" + weatherId + "' was not found.", "weatherId");
 			}
 			return weather;
+		}
+
+		private TerrainMaterialProto GetAsteroidMaterial(string materialId) {
+			string normalizedId = (materialId ?? "").Trim();
+			if (string.IsNullOrEmpty(normalizedId)) {
+				throw new ArgumentException("Select asteroid material first.", "materialId");
+			}
+
+			TerrainMaterialProto material;
+			if (!m_protosDb.TryGetProto(new Proto.ID(normalizedId), out material) || !IsAsteroidMaterial(material)) {
+				throw new ArgumentException("Asteroid material '" + normalizedId + "' was not found.", "materialId");
+			}
+			return material;
+		}
+
+		private Asteroid GetActiveAsteroid(int asteroidId) {
+			foreach (Asteroid asteroid in m_asteroidsManager.AsteroidsActive.AsEnumerable()) {
+				if (asteroid.Id.Value == asteroidId) {
+					return asteroid;
+				}
+			}
+			throw new ArgumentException("Active asteroid #" + asteroidId + " was not found.", "asteroidId");
+		}
+
+		private static bool IsAsteroidMaterial(TerrainMaterialProto material) {
+			return material.AsteroidSpawnWeight > 0 || material.IsAsteroidFillerMaterial;
+		}
+
+		private static bool MatchesAsteroidMaterialFilter(TerrainMaterialProto material, string filter) {
+			return string.IsNullOrEmpty(filter)
+				|| material.Id.ToString().IndexOf(filter, StringComparison.OrdinalIgnoreCase) >= 0
+				|| material.MinedProduct.Strings.Name.ToString().IndexOf(filter, StringComparison.OrdinalIgnoreCase) >= 0;
+		}
+
+		private static string GetAsteroidState(Asteroid asteroid) {
+			if (asteroid.IsDropped) {
+				return "Dropped";
+			}
+			if (asteroid.ReachedOrbit) {
+				return "Orbit";
+			}
+			if (asteroid.IsTravellingToOrbit) {
+				return "Travelling";
+			}
+			if (asteroid.IsDiscovered) {
+				return "Discovered";
+			}
+			if (asteroid.IsBeingDiscovered) {
+				return "Scanning";
+			}
+			return "Active";
+		}
+
+		private static string GetAsteroidMaterialsSummary(Asteroid asteroid) {
+			return string.Join(", ", asteroid.Materials.Select(x => x.First.MinedProduct.Strings.Name + " x" + x.Second).ToArray());
 		}
 
 		private WeatherProto GetSunnyWeather() {
@@ -1181,6 +1323,38 @@ namespace ResourceQuantityEditor {
 		public WeatherRow(string id, string name) {
 			Id = id;
 			Name = name;
+		}
+	}
+
+	public struct AsteroidMaterialRow {
+		public readonly ProductProto Product;
+		public readonly string Id;
+		public readonly string Name;
+		public readonly int SpawnWeight;
+		public readonly bool IsFiller;
+
+		public AsteroidMaterialRow(ProductProto product, string id, string name, int spawnWeight, bool isFiller) {
+			Product = product;
+			Id = id;
+			Name = name;
+			SpawnWeight = spawnWeight;
+			IsFiller = isFiller;
+		}
+	}
+
+	public struct AsteroidRow {
+		public readonly int Id;
+		public readonly string State;
+		public readonly int Radius;
+		public readonly string Quantity;
+		public readonly string Materials;
+
+		public AsteroidRow(int id, string state, int radius, string quantity, string materials) {
+			Id = id;
+			State = state;
+			Radius = radius;
+			Quantity = quantity;
+			Materials = materials;
 		}
 	}
 }

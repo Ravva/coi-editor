@@ -1,8 +1,8 @@
 {
   "id": "ResourceQuantityEditor",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "display_name": "Resource Quantity Editor",
-  "description_short": "Console commands for editing product quantities in storages.",
+  "description_short": "In-game editor for resources, sandbox tools, weather, terrain, logistics, and asteroids.",
   "authors": "Ravva",
   "primary_dlls": [ "ResourceQuantityEditor.dll" ],
   "primary_mod_class_name": "ResourceQuantityEditor.ResourceQuantityEditor",

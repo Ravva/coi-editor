@@ -13,6 +13,7 @@ The project currently ships as the `ResourceQuantityEditor` mod. It can be opene
 - Unlock or finish research.
 - Control weather overrides and weather intensity.
 - Remove selected trees and process terrain designations.
+- Create, capture, and land asteroids with one or two chosen materials.
 - Reveal, scan, and visit world-map locations.
 - Add repaired cargo ships and increase vehicle limits.
 - Open the in-game editor window with **F8** or `rqe_ui`.

@@ -1,6 +1,6 @@
 Resource Quantity Editor
 
-This mod adds in-game console commands for editing quantities in Captain of Industry storages.
+This mod adds an in-game editor and console commands for resources, sandbox tools, weather, terrain, logistics, and asteroids in Captain of Industry.
 
 Commands:
   rqe_list_storages
@@ -30,4 +30,4 @@ Commands:
   rqe_fill_storage <storageIdNumber>
   rqe_empty_storage <storageIdNumber>
 
-Use rqe_list_storages first to find storage ids and assigned product ids.
+Open the in-game editor with F8 or rqe_ui. Use rqe_list_storages first to find storage ids and assigned product ids.

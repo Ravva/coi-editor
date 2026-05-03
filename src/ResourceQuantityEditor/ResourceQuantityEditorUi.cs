@@ -26,14 +26,28 @@ namespace ResourceQuantityEditor {
 		private bool m_productFilterWasEntered;
 		private string m_weatherFilter = "";
 		private bool m_weatherFilterWasEntered;
+		private string m_asteroidMaterialFilter = "";
+		private bool m_asteroidMaterialFilterWasEntered;
+		private bool m_showAsteroidMaterial1Dropdown;
+		private bool m_showAsteroidMaterial2Dropdown;
 		private string m_selectedWeatherId = "";
 		private string m_selectedWeatherName = "";
+		private string m_selectedAsteroidMaterial1Id = "";
+		private string m_selectedAsteroidMaterial1Name = "";
+		private string m_selectedAsteroidMaterial2Id = "";
+		private string m_selectedAsteroidMaterial2Name = "";
+		private int m_selectedAsteroidId;
+		private bool m_hasSelectedAsteroid;
 		private string m_selectedProductId = "";
 		private string m_selectedProductName = "";
 		private string m_resourceAmount = "100";
 		private string m_populationAmount = "100";
 		private string m_weatherSunIntensity = "100";
 		private string m_weatherRainIntensity = "0";
+		private string m_asteroidRadius = "45";
+		private string m_asteroidMaterialRatio = "1";
+		private string m_asteroidLandingX = "0";
+		private string m_asteroidLandingY = "0";
 		private string m_cargoShipsAmount = "2";
 		private string m_vehicleLimitAmount = "100";
 		private string m_status = "";
@@ -120,9 +134,10 @@ namespace ResourceQuantityEditor {
 			tabs.Add(L("Economy"), ICON_EMPTY, BuildEconomyTab(), Scroll.No);
 			tabs.Add(L("Environment"), ICON_EMPTY, BuildEnvironmentTab(), Scroll.No);
 			tabs.Add(L("Terrain"), ICON_EMPTY, BuildTerrainTab(), Scroll.No);
+			tabs.Add(L("Asteroids"), ICON_EMPTY, BuildAsteroidsTab(), Scroll.No);
 			tabs.Add(L("Weather"), ICON_EMPTY, BuildWeatherTab(), Scroll.No);
 			tabs.Add(L("Logistics"), ICON_EMPTY, BuildLogisticsTab(), Scroll.No);
-			if (m_tab > 6) {
+			if (m_tab > 7) {
 				m_tab = 0;
 			}
 			tabs.SwitchToTab(m_tab);
@@ -190,6 +205,14 @@ namespace ResourceQuantityEditor {
 			Column root = new Column(12);
 
 			root.Add(BuildTerrainControlsDeck());
+			return root.FlexGrow(1);
+		}
+
+		private UiComponent BuildAsteroidsTab() {
+			Column root = new Column(12);
+
+			root.Add(BuildAsteroidControlsDeck());
+			root.Add(BuildAsteroidsListDeck());
 			return root.FlexGrow(1);
 		}
 
@@ -451,6 +474,196 @@ namespace ResourceQuantityEditor {
 			return panel;
 		}
 
+		private UiComponent BuildAsteroidControlsDeck() {
+			PanelWithHeader panel = new PanelWithHeader(L("ASTEROID CONTROL"));
+			panel.AttachTitleIcon(ICON_EMPTY);
+			panel.BodyGap(8);
+
+			Row materials = CenteredRow();
+			materials.Add(BuildAsteroidMaterialDropdown(1, "Material 1", m_selectedAsteroidMaterial1Id, m_selectedAsteroidMaterial1Name, m_showAsteroidMaterial1Dropdown).Width(390));
+			materials.Add(BuildAsteroidMaterialDropdown(2, "Material 2", m_selectedAsteroidMaterial2Id, m_selectedAsteroidMaterial2Name, m_showAsteroidMaterial2Dropdown).Width(390));
+			FinishCenteredRow(materials);
+
+			Row create = CenteredRow();
+			create.Add(new Label(L("Radius")).UpperCase(false).Width(70));
+			create.Add(new TextField()
+				.Text(m_asteroidRadius)
+				.NumericOnly()
+				.CharLimit(4)
+				.OnValueChanged(x => m_asteroidRadius = x, isDelayed: false)
+				.Width(80));
+			create.Add(new Label(L("M1:M2 ratio")).UpperCase(false).Width(100));
+			create.Add(new TextField()
+				.Text(m_asteroidMaterialRatio)
+				.NumericOnly()
+				.CharLimit(4)
+				.OnValueChanged(x => m_asteroidMaterialRatio = x, isDelayed: false)
+				.Width(80));
+			create.Add(ActionButton("Place in orbit", RunSpawnAsteroid, Button.Primary).Width(170));
+			create.Add(ActionButton("Capture selected", RunCaptureAsteroid, Button.General).Width(170));
+			FinishCenteredRow(create);
+
+			Row landing = CenteredRow();
+			landing.Add(new Label(L("Selected asteroid")).UpperCase(false).Width(130));
+			landing.Add(new Label(L(!m_hasSelectedAsteroid ? "None" : "#" + m_selectedAsteroidId)).Width(80));
+			landing.Add(new Label(L("Landing X")).UpperCase(false).Width(80));
+			landing.Add(new TextField()
+				.Text(m_asteroidLandingX)
+				.NumericOnly()
+				.CharLimit(6)
+				.OnValueChanged(x => m_asteroidLandingX = x, isDelayed: false)
+				.Width(90));
+			landing.Add(new Label(L("Y")).UpperCase(false).Width(30));
+			landing.Add(new TextField()
+				.Text(m_asteroidLandingY)
+				.NumericOnly()
+				.CharLimit(6)
+				.OnValueChanged(x => m_asteroidLandingY = x, isDelayed: false)
+				.Width(90));
+			landing.Add(ActionButton("Land selected asteroid", RunDropAsteroid, Button.Warning).Width(210));
+			FinishCenteredRow(landing);
+
+			Row filter = CenteredRow();
+			filter.Add(new Label(L("Search materials")).UpperCase(false).Width(130));
+			TextField materialFilterField = new TextField()
+				.Text(m_asteroidMaterialFilter)
+				.OnValueChanged(delegate(string x) {
+					if (!string.IsNullOrEmpty(x)) {
+						m_asteroidMaterialFilterWasEntered = true;
+					}
+					m_asteroidMaterialFilter = x;
+					RefreshWindow();
+				}, isDelayed: true)
+				.Width(260);
+			if (!m_asteroidMaterialFilterWasEntered) {
+				materialFilterField.Placeholder(L("id or name"));
+			}
+			filter.Add(materialFilterField);
+			FinishCenteredRow(filter);
+
+			Column body = new Column(8);
+			body.Add(materials);
+			if (m_showAsteroidMaterial1Dropdown || m_showAsteroidMaterial2Dropdown) {
+				body.Add(BuildAsteroidMaterialDropdownList(m_showAsteroidMaterial1Dropdown ? 1 : 2));
+			}
+			body.Add(create);
+			body.Add(landing);
+			body.Add(filter);
+
+			panel.BodyAdd(new UiComponent[] { body });
+			return panel;
+		}
+
+		private UiComponent BuildAsteroidMaterialDropdown(int slot, string label, string selectedId, string selectedName, bool isOpen) {
+			Column column = new Column(4);
+			Row title = new Row(6);
+			title.Add(new Label(L(label)).UpperCase(false).Width(85));
+			if (slot == 2) {
+				title.Add(ActionButton("Clear", delegate {
+					m_selectedAsteroidMaterial2Id = "";
+					m_selectedAsteroidMaterial2Name = "";
+					m_showAsteroidMaterial2Dropdown = false;
+					RefreshWindow();
+				}, Button.General).Width(80));
+			}
+			column.Add(title);
+
+			Row selector = new Row(8);
+			ProductProto selectedProduct = GetAsteroidMaterialProduct(selectedId);
+			selector.Add(selectedProduct != null
+				? (UiComponent)new Icon(selectedProduct, noTooltip: true, noRightClick: true).Size(24)
+				: new Icon(ICON_EMPTY).Size(24));
+			selector.Add(new ButtonText(Button.Area, L(string.IsNullOrEmpty(selectedName) ? "None" : selectedName), delegate {
+				m_showAsteroidMaterial1Dropdown = slot == 1 && !isOpen;
+				m_showAsteroidMaterial2Dropdown = slot == 2 && !isOpen;
+				RefreshWindow();
+			}).Width(330));
+			column.Add(selector);
+			return column;
+		}
+
+		private UiComponent BuildAsteroidMaterialDropdownList(int slot) {
+			PanelWithHeader panel = new PanelWithHeader(L(slot == 1 ? "SELECT MATERIAL 1" : "SELECT MATERIAL 2"));
+			panel.AttachTitleIcon(ICON_EMPTY);
+
+			Column list = new Column(6);
+			if (slot == 2) {
+				Row none = CenteredRow();
+				none.Add(new Icon(ICON_EMPTY).Size(24));
+				none.Add(new ButtonText(Button.Area, L("None"), delegate {
+					m_selectedAsteroidMaterial2Id = "";
+					m_selectedAsteroidMaterial2Name = "";
+					m_showAsteroidMaterial2Dropdown = false;
+					RefreshWindow();
+				}).Width(420));
+				FinishCenteredRow(none);
+				list.Add(none);
+			}
+
+			foreach (AsteroidMaterialRow material in s_sandboxFeatures.GetAsteroidMaterialRows(m_asteroidMaterialFilter)) {
+				list.Add(BuildAsteroidMaterialOptionRow(material, slot));
+			}
+
+			ScrollColumn scroll = new ScrollColumn();
+			scroll.ScrollerAlwaysVisible();
+			scroll.Height(230);
+			scroll.Add(list);
+			panel.BodyAdd(new UiComponent[] { scroll });
+			return panel;
+		}
+
+		private UiComponent BuildAsteroidMaterialOptionRow(AsteroidMaterialRow material, int slot) {
+			Row row = CenteredRow();
+			row.Add(new Icon(material.Product, noTooltip: true, noRightClick: true).Size(24));
+			row.Add(new ButtonText(Button.Area, L(material.Name), delegate {
+				SelectAsteroidMaterial(material, slot);
+				RefreshWindow();
+			}).Width(300));
+			row.Add(new Label(L(material.Id)).TinyFontSize().Width(220));
+			row.Add(new Label(L(material.IsFiller ? "Filler" : "Ore")).Width(70));
+			FinishCenteredRow(row);
+			return row;
+		}
+
+		private UiComponent BuildAsteroidsListDeck() {
+			PanelWithHeader panel = new PanelWithHeader(L("ACTIVE ASTEROIDS"));
+			panel.AttachTitleIcon(ICON_EMPTY);
+
+			Column list = new Column(8);
+			Row header = CenteredRow();
+			header.Add(new Label(L("ID")).TinyFontSize().Width(70));
+			header.Add(new Label(L("State")).TinyFontSize().Width(100));
+			header.Add(new Label(L("Radius")).TinyFontSize().Width(80));
+			header.Add(new Label(L("Materials")).TinyFontSize().Width(500));
+			FinishCenteredRow(header);
+			list.Add(header);
+
+			foreach (AsteroidRow asteroid in s_sandboxFeatures.GetAsteroidRows()) {
+				list.Add(BuildAsteroidRow(asteroid));
+			}
+
+			ScrollColumn scroll = new ScrollColumn();
+			scroll.ScrollerAlwaysVisible();
+			scroll.Height(170);
+			scroll.Add(list);
+			panel.BodyAdd(new UiComponent[] { scroll });
+			return panel;
+		}
+
+		private UiComponent BuildAsteroidRow(AsteroidRow asteroid) {
+			Row row = CenteredRow();
+			row.Add(new ButtonText(Button.Area, L("#" + asteroid.Id), delegate {
+				m_selectedAsteroidId = asteroid.Id;
+				m_hasSelectedAsteroid = true;
+				RefreshWindow();
+			}).Width(70));
+			row.Add(new Label(L(asteroid.State)).Width(100));
+			row.Add(new Label(L(asteroid.Radius.ToString())).Width(80));
+			row.Add(new Label(L(asteroid.Materials)).Width(500));
+			FinishCenteredRow(row);
+			return row;
+		}
+
 		private UiComponent BuildWeatherListDeck() {
 			PanelWithHeader panel = new PanelWithHeader(L("WEATHER LIST"));
 			panel.AttachTitleIcon(ICON_EMPTY);
@@ -671,6 +884,30 @@ namespace ResourceQuantityEditor {
 			m_selectedProductName = GetProductName(product);
 		}
 
+		private ProductProto GetAsteroidMaterialProduct(string materialId) {
+			if (string.IsNullOrEmpty(materialId)) {
+				return null;
+			}
+			foreach (AsteroidMaterialRow material in s_sandboxFeatures.GetAsteroidMaterialRows("")) {
+				if (material.Id == materialId) {
+					return material.Product;
+				}
+			}
+			return null;
+		}
+
+		private void SelectAsteroidMaterial(AsteroidMaterialRow material, int slot) {
+			if (slot == 1) {
+				m_selectedAsteroidMaterial1Id = material.Id;
+				m_selectedAsteroidMaterial1Name = material.Name;
+				m_showAsteroidMaterial1Dropdown = false;
+				return;
+			}
+			m_selectedAsteroidMaterial2Id = material.Id;
+			m_selectedAsteroidMaterial2Name = material.Name;
+			m_showAsteroidMaterial2Dropdown = false;
+		}
+
 		private static string GetProductId(ProductProto product) {
 			return product.Id.ToString();
 		}
@@ -728,6 +965,42 @@ namespace ResourceQuantityEditor {
 				return;
 			}
 			RunSandboxCommand(() => s_sandboxFeatures.IncreaseVehicleLimit(amount));
+		}
+
+		private void RunSpawnAsteroid() {
+			int radius;
+			int ratio;
+			if (!int.TryParse(m_asteroidRadius, out radius) || !int.TryParse(m_asteroidMaterialRatio, out ratio)) {
+				SetStatus("Asteroid radius and material ratio must be numbers.");
+				return;
+			}
+			RunSandboxCommand(() => s_sandboxFeatures.SpawnAsteroidToOrbit(
+				m_selectedAsteroidMaterial1Id,
+				m_selectedAsteroidMaterial2Id,
+				radius,
+				ratio));
+		}
+
+		private void RunCaptureAsteroid() {
+			if (!m_hasSelectedAsteroid) {
+				SetStatus("Select an asteroid first.");
+				return;
+			}
+			RunSandboxCommand(() => s_sandboxFeatures.CaptureAsteroidToOrbit(m_selectedAsteroidId));
+		}
+
+		private void RunDropAsteroid() {
+			int x;
+			int y;
+			if (!m_hasSelectedAsteroid) {
+				SetStatus("Select an asteroid first.");
+				return;
+			}
+			if (!int.TryParse(m_asteroidLandingX, out x) || !int.TryParse(m_asteroidLandingY, out y)) {
+				SetStatus("Landing coordinates must be numbers.");
+				return;
+			}
+			RunSandboxCommand(() => s_sandboxFeatures.DropAsteroidAt(m_selectedAsteroidId, x, y));
 		}
 
 		private void RunGlobalSet() {
