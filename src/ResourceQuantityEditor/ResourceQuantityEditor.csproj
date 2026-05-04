@@ -35,11 +35,10 @@
 
   <ItemGroup>
     <Compile Include="ResourceQuantityEditor.cs" />
-    <Compile Include="StorageResourceEditorService.cs" />
+    <Compile Include="ProductHelper.cs" />
     <Compile Include="GlobalResourceEditorService.cs" />
     <Compile Include="SandboxFeatureService.cs" />
     <Compile Include="TreeRangeRemovalService.cs" />
-    <Compile Include="StorageResourceConsoleCommands.cs" />
     <Compile Include="ResourceQuantityEditorUi.cs" />
   </ItemGroup>
 

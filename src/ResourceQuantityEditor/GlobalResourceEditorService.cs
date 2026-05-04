@@ -32,7 +32,7 @@ namespace ResourceQuantityEditor {
 			string normalizedFilter = (filter ?? string.Empty).Trim();
 			return m_protosDb.All<ProductProto>()
 				.Where(x => x.IsStorable)
-				.Where(x => MatchesFilter(x, normalizedFilter))
+				.Where(x => ProductHelper.MatchesFilter(x, normalizedFilter))
 				.Select(x => new GlobalProductRow(x, m_assets.GetAvailableQuantityForRemoval(x).Value))
 				.Where(x => x.Amount > 0 || !string.IsNullOrEmpty(normalizedFilter))
 				.OrderBy(x => x.Product.Id.ToString())
@@ -40,8 +40,8 @@ namespace ResourceQuantityEditor {
 		}
 
 		public string SetGlobal(string productId, int amount) {
-			ValidateAmount(amount);
-			ProductProto product = GetProduct(productId);
+			ProductHelper.ValidateAmount(amount);
+			ProductProto product = ProductHelper.GetProduct(productId, m_protosDb);
 			int current = m_assets.GetAvailableQuantityForRemoval(product).Value;
 
 			if (amount > current) {
@@ -54,28 +54,17 @@ namespace ResourceQuantityEditor {
 		}
 
 		public string AddGlobal(string productId, int amount) {
-			ValidateAmount(amount);
-			ProductProto product = GetProduct(productId);
+			ProductHelper.ValidateAmount(amount);
+			ProductProto product = ProductHelper.GetProduct(productId, m_protosDb);
 			StoreViaShipyard(product, amount);
 			return Format(product, "added");
 		}
 
 		public string RemoveGlobal(string productId, int amount) {
-			ValidateAmount(amount);
-			ProductProto product = GetProduct(productId);
+			ProductHelper.ValidateAmount(amount);
+			ProductProto product = ProductHelper.GetProduct(productId, m_protosDb);
 			m_assets.RemoveAsMuchAs(new ProductQuantity(product, new Quantity(amount)), DestroyReason.Cheated);
 			return Format(product, "removed");
-		}
-
-		private ProductProto GetProduct(string productId) {
-			ProductProto product;
-			if (!m_protosDb.TryGetProto(new ProductProto.ID(productId), out product)) {
-				throw new ArgumentException(
-					string.Format("Product '{0}' was not found. Use rqe_list_products or rqe_list_products <filter> to find product ids.", productId),
-					"productId");
-			}
-
-			return product;
 		}
 
 		private string Format(ProductProto product, string action) {
@@ -92,21 +81,6 @@ namespace ResourceQuantityEditor {
 			}
 
 			m_assets.StoreValue(product.Id.ToAssetValue(amount, m_protosDb), CreateReason.Cheated);
-		}
-
-		private static void ValidateAmount(int amount) {
-			if (amount < 0) {
-				throw new ArgumentOutOfRangeException("amount", amount, "Amount must be non-negative.");
-			}
-		}
-
-		private static bool MatchesFilter(ProductProto product, string filter) {
-			if (string.IsNullOrEmpty(filter)) {
-				return true;
-			}
-
-			return product.Id.ToString().IndexOf(filter, StringComparison.OrdinalIgnoreCase) >= 0
-				|| product.Strings.Name.ToString().IndexOf(filter, StringComparison.OrdinalIgnoreCase) >= 0;
 		}
 	}
 

@@ -162,6 +162,7 @@ namespace ResourceQuantityEditor {
 		public bool IgnoreMissingUnity { get { return m_sandbox.IgnoreMissingUnity; } }
 		public bool IgnoreMissingFood { get { return m_sandbox.IgnoreMissingFood; } }
 		public bool IsAllResearchUnlocked { get { return m_sandbox.IsAllResearchUnlocked; } }
+		public bool InstantBuildAndConstruction { get { return IsInstaBuildEnabled && EnableInstantConstruction; } }
 		public string CurrentWeatherName {
 			get {
 				if (!m_sandbox.CurrentWeather.HasValue) {
@@ -218,6 +219,12 @@ namespace ResourceQuantityEditor {
 			EnsureSandboxEnabled(enabled);
 			m_sandbox.EnableInstantConstruction = enabled;
 			return "Instant construction " + (enabled ? "enabled." : "disabled.");
+		}
+
+		public string SetInstantBuildAndConstruction(bool enabled) {
+			SetInstaBuild(enabled);
+			SetEnableInstantConstruction(enabled);
+			return "Instant build and construction " + (enabled ? "enabled." : "disabled.");
 		}
 
 		public string SetIgnoreFuelConsumption(bool ignore) {
@@ -509,14 +516,13 @@ namespace ResourceQuantityEditor {
 		public string EnableCommonCheats() {
 			EnsureSandboxEnabled(true);
 			m_sandbox.IgnoreMissingMaintenance = true;
-			m_sandbox.EnableInstantConstruction = true;
 			m_sandbox.IgnoreFuelConsumption = true;
 			m_sandbox.IgnoreMissingWorkers = true;
 			m_sandbox.IgnoreMissingPower = true;
 			m_sandbox.IgnoreMissingComputing = true;
 			m_sandbox.IgnoreMissingUnity = true;
 			m_sandbox.IgnoreMissingFood = true;
-			SetInstaBuild(true);
+			SetInstantBuildAndConstruction(true);
 			EnableSourceSinks();
 			UpdateFuelConsumptionDisabled();
 			return "Common sandbox cheats enabled.";
@@ -524,14 +530,13 @@ namespace ResourceQuantityEditor {
 
 		public string DisableCommonCheats() {
 			m_sandbox.IgnoreMissingMaintenance = false;
-			m_sandbox.EnableInstantConstruction = false;
 			m_sandbox.IgnoreFuelConsumption = false;
 			m_sandbox.IgnoreMissingWorkers = false;
 			m_sandbox.IgnoreMissingPower = false;
 			m_sandbox.IgnoreMissingComputing = false;
 			m_sandbox.IgnoreMissingUnity = false;
 			m_sandbox.IgnoreMissingFood = false;
-			SetInstaBuild(false);
+			SetInstantBuildAndConstruction(false);
 			UpdateFuelConsumptionDisabled();
 			return "Common sandbox cheats disabled.";
 		}

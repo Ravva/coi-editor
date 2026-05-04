@@ -10,7 +10,6 @@ namespace ResourceQuantityEditor {
 
 	public sealed class ResourceQuantityEditorUi : MonoBehaviour {
 		private static ResourceQuantityEditorUi s_instance;
-		private static StorageResourceEditorService s_storageEditor;
 		private static GlobalResourceEditorService s_globalEditor;
 		private static SandboxFeatureService s_sandboxFeatures;
 		private static TreeRangeRemovalService s_treeRangeRemoval;
@@ -53,12 +52,10 @@ namespace ResourceQuantityEditor {
 		private string m_status = "";
 
 		public static void Install(
-			StorageResourceEditorService storageEditor,
 			GlobalResourceEditorService globalEditor,
 			SandboxFeatureService sandboxFeatures,
 			TreeRangeRemovalService treeRangeRemoval,
 			UiContext uiContext) {
-			s_storageEditor = storageEditor;
 			s_globalEditor = globalEditor;
 			s_sandboxFeatures = sandboxFeatures;
 			s_treeRangeRemoval = treeRangeRemoval;
@@ -130,6 +127,7 @@ namespace ResourceQuantityEditor {
 
 			TabContainer tabs = new TabContainer().ReducedPaddingBody();
 			tabs.Add(L("Global"), ICON_EMPTY, BuildGlobalTab(), Scroll.No);
+			tabs.Add(L("Sandbox"), ICON_EMPTY, BuildSandboxTab(), Scroll.No);
 			tabs.Add(L("Settlement"), ICON_POPULATION, BuildSettlementTab(), Scroll.No);
 			tabs.Add(L("Economy"), ICON_EMPTY, BuildEconomyTab(), Scroll.No);
 			tabs.Add(L("Environment"), ICON_EMPTY, BuildEnvironmentTab(), Scroll.No);
@@ -137,7 +135,7 @@ namespace ResourceQuantityEditor {
 			tabs.Add(L("Asteroids"), ICON_EMPTY, BuildAsteroidsTab(), Scroll.No);
 			tabs.Add(L("Weather"), ICON_EMPTY, BuildWeatherTab(), Scroll.No);
 			tabs.Add(L("Logistics"), ICON_EMPTY, BuildLogisticsTab(), Scroll.No);
-			if (m_tab > 7) {
+			if (m_tab > 8) {
 				m_tab = 0;
 			}
 			tabs.SwitchToTab(m_tab);
@@ -329,15 +327,11 @@ namespace ResourceQuantityEditor {
 			panel.BodyGap(8);
 
 			Row togglesA = CenteredRow();
-			togglesA.Add(SandboxToggle("Instant build", s_sandboxFeatures.IsInstaBuildEnabled, () => s_sandboxFeatures.SetInstaBuild(!s_sandboxFeatures.IsInstaBuildEnabled)).Width(175));
-			togglesA.Add(SandboxToggle("Instant construction", s_sandboxFeatures.EnableInstantConstruction, () => s_sandboxFeatures.SetEnableInstantConstruction(!s_sandboxFeatures.EnableInstantConstruction)).Width(225));
 			togglesA.Add(SandboxToggle("Source/sink buildings", s_sandboxFeatures.AreSourcesAndSinksAllowed, () => s_sandboxFeatures.SetSourceSinks(!s_sandboxFeatures.AreSourcesAndSinksAllowed)).Width(230));
 			FinishCenteredRow(togglesA);
 
 			Row togglesB = CenteredRow();
 			togglesB.Add(SandboxToggle("No maintenance", s_sandboxFeatures.IgnoreMissingMaintenance, () => s_sandboxFeatures.SetIgnoreMissingMaintenance(!s_sandboxFeatures.IgnoreMissingMaintenance)).Width(190));
-			togglesB.Add(SandboxToggle("No fuel consumption", s_sandboxFeatures.IgnoreFuelConsumption, () => s_sandboxFeatures.SetIgnoreFuelConsumption(!s_sandboxFeatures.IgnoreFuelConsumption)).Width(220));
-			togglesB.Add(SandboxToggle("Unlimited vehicle fuel", s_sandboxFeatures.UnlimitedVehicleFuel, () => s_sandboxFeatures.SetUnlimitedVehicleFuel(!s_sandboxFeatures.UnlimitedVehicleFuel)).Width(230));
 			FinishCenteredRow(togglesB);
 
 			Row togglesC = CenteredRow();
@@ -739,8 +733,7 @@ namespace ResourceQuantityEditor {
 			panel.BodyGap(8);
 
 			Row togglesA = CenteredRow();
-			togglesA.Add(SandboxToggle("Instant build mode", s_sandboxFeatures.IsInstaBuildEnabled, () => s_sandboxFeatures.SetInstaBuild(!s_sandboxFeatures.IsInstaBuildEnabled)).Width(220));
-			togglesA.Add(SandboxToggle("Instant construction", s_sandboxFeatures.EnableInstantConstruction, () => s_sandboxFeatures.SetEnableInstantConstruction(!s_sandboxFeatures.EnableInstantConstruction)).Width(230));
+			togglesA.Add(SandboxToggle("Instant build and construction", s_sandboxFeatures.InstantBuildAndConstruction, () => s_sandboxFeatures.SetInstantBuildAndConstruction(!s_sandboxFeatures.InstantBuildAndConstruction)).Width(360));
 			togglesA.Add(SandboxToggle("Source/sink buildings", s_sandboxFeatures.AreSourcesAndSinksAllowed, () => s_sandboxFeatures.SetSourceSinks(!s_sandboxFeatures.AreSourcesAndSinksAllowed)).Width(230));
 			togglesA.Add(SandboxToggle("Ignore missing workers", s_sandboxFeatures.IgnoreMissingWorkers, () => s_sandboxFeatures.SetIgnoreMissingWorkers(!s_sandboxFeatures.IgnoreMissingWorkers)).Width(230));
 			FinishCenteredRow(togglesA);
@@ -753,7 +746,6 @@ namespace ResourceQuantityEditor {
 			FinishCenteredRow(togglesB);
 
 			Row togglesC = CenteredRow();
-			togglesC.Add(SandboxToggle("Ignore fuel consumption", s_sandboxFeatures.IgnoreFuelConsumption, () => s_sandboxFeatures.SetIgnoreFuelConsumption(!s_sandboxFeatures.IgnoreFuelConsumption)).Width(240));
 			togglesC.Add(SandboxToggle("Ignore missing maintenance", s_sandboxFeatures.IgnoreMissingMaintenance, () => s_sandboxFeatures.SetIgnoreMissingMaintenance(!s_sandboxFeatures.IgnoreMissingMaintenance)).Width(260));
 			FinishCenteredRow(togglesC);
 
@@ -767,7 +759,6 @@ namespace ResourceQuantityEditor {
 			Row togglesE = CenteredRow();
 			togglesE.Add(SandboxToggle("No depleted uranium waste", s_sandboxFeatures.NoRadioactiveWaste, () => s_sandboxFeatures.SetNoRadioactiveWaste(!s_sandboxFeatures.NoRadioactiveWaste)).Width(260));
 			togglesE.Add(SandboxToggle("Unlimited unity reserve", s_sandboxFeatures.UnlimitedUnity, () => s_sandboxFeatures.SetUnlimitedUnity(!s_sandboxFeatures.UnlimitedUnity)).Width(250));
-			togglesE.Add(SandboxToggle("Unlimited vehicle fuel", s_sandboxFeatures.UnlimitedVehicleFuel, () => s_sandboxFeatures.SetUnlimitedVehicleFuel(!s_sandboxFeatures.UnlimitedVehicleFuel)).Width(250));
 			FinishCenteredRow(togglesE);
 
 			panel.BodyAdd(new UiComponent[] { togglesA, togglesB, togglesC, togglesD, togglesE });
@@ -870,10 +861,10 @@ namespace ResourceQuantityEditor {
 			if (string.IsNullOrEmpty(m_selectedProductId)) {
 				return null;
 			}
-			ProductProto[] products = s_storageEditor.GetProducts(m_selectedProductId);
-			for (int i = 0; i < products.Length; i++) {
-				if (products[i].Id.ToString() == m_selectedProductId) {
-					return products[i];
+			GlobalProductRow[] rows = s_globalEditor.GetGlobalProducts(m_selectedProductId);
+			for (int i = 0; i < rows.Length; i++) {
+				if (rows[i].Product.Id.ToString() == m_selectedProductId) {
+					return rows[i].Product;
 				}
 			}
 			return null;

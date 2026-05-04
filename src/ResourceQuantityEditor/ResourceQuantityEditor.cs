@@ -29,11 +29,9 @@ namespace ResourceQuantityEditor {
 			ProtosDb protosDb,
 			bool gameWasLoaded) {
 			depBuilder.RegisterInstance(this, disposeOnResolverTermination: false).AsSelf();
-			depBuilder.RegisterDependency<StorageResourceEditorService>().AsSelf();
 			depBuilder.RegisterDependency<GlobalResourceEditorService>().AsSelf();
 			depBuilder.RegisterDependency<SandboxFeatureService>().AsSelf();
 			depBuilder.RegisterDependency<TreeRangeRemovalService>().AsSelf();
-			depBuilder.RegisterDependency<StorageResourceConsoleCommands>().AsSelf();
 		}
 
 		public void EarlyInit(DependencyResolver resolver) {
@@ -41,7 +39,6 @@ namespace ResourceQuantityEditor {
 
 		public void Initialize(DependencyResolver resolver, bool gameWasLoaded) {
 			ResourceQuantityEditorUi.Install(
-				resolver.Resolve<StorageResourceEditorService>(),
 				resolver.Resolve<GlobalResourceEditorService>(),
 				resolver.Resolve<SandboxFeatureService>(),
 				resolver.Resolve<TreeRangeRemovalService>(),
