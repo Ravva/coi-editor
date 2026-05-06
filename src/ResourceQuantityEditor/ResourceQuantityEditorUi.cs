@@ -16,6 +16,10 @@ namespace ResourceQuantityEditor {
 		private static UiContext s_uiContext;
 		private const string ICON_EMPTY = "Assets/Unity/UserInterface/General/Empty128.png";
 		private const string ICON_POPULATION = "Assets/Unity/UserInterface/General/Population.svg";
+		private const string ICON_STORAGE = "Assets/Unity/UserInterface/General/Storage.svg";
+		private const string ICON_WEATHER = "Assets/Unity/UserInterface/General/Weather.svg";
+		private const string ICON_WRENCH = "Assets/Unity/UserInterface/General/Wrench.svg";
+		private const string ICON_TRUCK = "Assets/Unity/UserInterface/General/Truck.svg";
 
 		private Window m_window;
 		private TextField m_statusField;
@@ -29,6 +33,9 @@ namespace ResourceQuantityEditor {
 		private bool m_asteroidMaterialFilterWasEntered;
 		private bool m_showAsteroidMaterial1Dropdown;
 		private bool m_showAsteroidMaterial2Dropdown;
+		private bool m_showProductsList;
+		private bool m_showWeatherList;
+		private bool m_showAsteroidsList;
 		private string m_selectedWeatherId = "";
 		private string m_selectedWeatherName = "";
 		private string m_selectedAsteroidMaterial1Id = "";
@@ -121,21 +128,17 @@ namespace ResourceQuantityEditor {
 
 		private Window BuildWindow() {
 			Window window = new Window(L("COI Editor"), addFullscreenButton: false)
-				.WindowSize(1120, 900)
+				.WindowSize(900, 800)
 				.MakeMovable()
 				.ShortcutToShow("F8");
 
 			TabContainer tabs = new TabContainer().ReducedPaddingBody();
-			tabs.Add(L("Global"), ICON_EMPTY, BuildGlobalTab(), Scroll.No);
-			tabs.Add(L("Sandbox"), ICON_EMPTY, BuildSandboxTab(), Scroll.No);
-			tabs.Add(L("Settlement"), ICON_POPULATION, BuildSettlementTab(), Scroll.No);
-			tabs.Add(L("Economy"), ICON_EMPTY, BuildEconomyTab(), Scroll.No);
-			tabs.Add(L("Environment"), ICON_EMPTY, BuildEnvironmentTab(), Scroll.No);
-			tabs.Add(L("Terrain"), ICON_EMPTY, BuildTerrainTab(), Scroll.No);
-			tabs.Add(L("Asteroids"), ICON_EMPTY, BuildAsteroidsTab(), Scroll.No);
-			tabs.Add(L("Weather"), ICON_EMPTY, BuildWeatherTab(), Scroll.No);
-			tabs.Add(L("Logistics"), ICON_EMPTY, BuildLogisticsTab(), Scroll.No);
-			if (m_tab > 8) {
+			tabs.Add(L("Resources"), null, BuildResourcesTab(), Scroll.No);
+			tabs.Add(L("World"), null, BuildWorldTab(), Scroll.No);
+			tabs.Add(L("Sandbox"), null, BuildSandboxTab(), Scroll.No);
+			tabs.Add(L("Settlement"), null, BuildSettlementTab(), Scroll.No);
+			tabs.Add(L("Logistics"), null, BuildLogisticsTab(), Scroll.No);
+			if (m_tab > 4) {
 				m_tab = 0;
 			}
 			tabs.SwitchToTab(m_tab);
@@ -149,81 +152,67 @@ namespace ResourceQuantityEditor {
 			return window;
 		}
 
-		private UiComponent BuildGlobalTab() {
+		private UiComponent BuildResourcesTab() {
 			Column root = new Column(12);
-			root.Add(BuildGlobalCommandDeck());
-			root.Add(BuildGlobalProductsList());
+			ScrollColumn scroll = new ScrollColumn().FlexGrow(1);
+			scroll.Add(BuildGlobalCommandDeck());
+			if (m_showProductsList) {
+				scroll.Add(BuildGlobalProductsList());
+			}
+			scroll.Add(BuildEconomyCheatsDeck());
+			scroll.Add(BuildResearchDeck());
+			root.Add(scroll);
+			return root.FlexGrow(1);
+		}
+
+		private UiComponent BuildWorldTab() {
+			Column root = new Column(12);
+			ScrollColumn scroll = new ScrollColumn().FlexGrow(1);
+			scroll.Add(BuildEnvironmentCheatsDeck());
+			scroll.Add(BuildSandboxWorldDeck());
+			scroll.Add(BuildWeatherControlsDeck());
+			if (m_showWeatherList) {
+				scroll.Add(BuildWeatherListDeck());
+			}
+			scroll.Add(BuildTerrainControlsDeck());
+			scroll.Add(BuildAsteroidControlsDeck());
+			if (m_showAsteroidsList) {
+				scroll.Add(BuildAsteroidsListDeck());
+			}
+			root.Add(scroll);
 			return root.FlexGrow(1);
 		}
 
 		private UiComponent BuildSandboxTab() {
 			Column root = new Column(12);
-
-			root.Add(BuildSandboxCommandDeck());
-			root.Add(BuildSandboxCheatsDeck());
-			root.Add(BuildSandboxPopulationDeck());
-			root.Add(BuildSandboxWorldDeck());
+			ScrollColumn scroll = new ScrollColumn().FlexGrow(1);
+			scroll.Add(BuildSandboxCommandDeck());
+			scroll.Add(BuildSandboxCheatsDeck());
+			scroll.Add(BuildSandboxPopulationDeck());
+			scroll.Add(BuildSandboxWorldDeck());
+			root.Add(scroll);
 			return root.FlexGrow(1);
 		}
 
 		private UiComponent BuildSettlementTab() {
 			Column root = new Column(12);
-
-			root.Add(BuildSandboxPopulationDeck());
-			root.Add(BuildSettlementNeedsDeck());
-			return root.FlexGrow(1);
-		}
-
-		private UiComponent BuildEconomyTab() {
-			Column root = new Column(12);
-
-			root.Add(BuildSandboxCommandDeck());
-			root.Add(BuildEconomyCheatsDeck());
-			root.Add(BuildResearchDeck());
-			return root.FlexGrow(1);
-		}
-
-		private UiComponent BuildEnvironmentTab() {
-			Column root = new Column(12);
-
-			root.Add(BuildEnvironmentCheatsDeck());
-			root.Add(BuildSandboxWorldDeck());
-			return root.FlexGrow(1);
-		}
-
-		private UiComponent BuildWeatherTab() {
-			Column root = new Column(12);
-
-			root.Add(BuildWeatherControlsDeck());
-			root.Add(BuildWeatherListDeck());
-			return root.FlexGrow(1);
-		}
-
-		private UiComponent BuildTerrainTab() {
-			Column root = new Column(12);
-
-			root.Add(BuildTerrainControlsDeck());
-			return root.FlexGrow(1);
-		}
-
-		private UiComponent BuildAsteroidsTab() {
-			Column root = new Column(12);
-
-			root.Add(BuildAsteroidControlsDeck());
-			root.Add(BuildAsteroidsListDeck());
+			ScrollColumn scroll = new ScrollColumn().FlexGrow(1);
+			scroll.Add(BuildSandboxPopulationDeck());
+			scroll.Add(BuildSettlementNeedsDeck());
+			root.Add(scroll);
 			return root.FlexGrow(1);
 		}
 
 		private UiComponent BuildLogisticsTab() {
 			Column root = new Column(12);
-
-			root.Add(BuildLogisticsDeck());
+			ScrollColumn scroll = new ScrollColumn().FlexGrow(1);
+			scroll.Add(BuildLogisticsDeck());
+			root.Add(scroll);
 			return root.FlexGrow(1);
 		}
 
 		private UiComponent BuildGlobalCommandDeck() {
 			PanelWithHeader panel = new PanelWithHeader(L("GLOBAL RESOURCE CONTROL"));
-			panel.AttachTitleIcon(ICON_EMPTY);
 			panel.BodyGap(10);
 
 			Row selectedRow = CenteredRow();
@@ -242,9 +231,10 @@ namespace ResourceQuantityEditor {
 			FinishCenteredRow(selectedRow);
 
 			Row actionsRow = CenteredRow();
-			actionsRow.Add(ActionButton("Set exact amount", RunGlobalSet, Button.Primary).Width(170));
-			actionsRow.Add(ActionButton("Add amount", RunGlobalAdd, Button.General).Width(140));
-			actionsRow.Add(ActionButton("Remove amount", RunGlobalRemove, Button.Warning).Width(165));
+			actionsRow.Add(ActionButton("Set amount", RunGlobalSet, Button.Primary).Width(130));
+			actionsRow.Add(ActionButton("Add", RunGlobalAdd, Button.General).Width(100));
+			actionsRow.Add(ActionButton("Remove", RunGlobalRemove, Button.Warning).Width(110));
+			actionsRow.Add(ActionButton(m_showProductsList ? "Hide inventory" : "Show inventory", () => { m_showProductsList = !m_showProductsList; RefreshWindow(); }, Button.General).Width(160));
 			actionsRow.Add(new Label(L("Search")).UpperCase(false).Width(56));
 			TextField productFilterField = new TextField()
 				.Text(m_productFilter)
@@ -268,7 +258,6 @@ namespace ResourceQuantityEditor {
 
 		private UiComponent BuildGlobalProductsList() {
 			PanelWithHeader products = new PanelWithHeader(L("GLOBAL INVENTORY"));
-			products.AttachTitleIcon(ICON_EMPTY);
 
 			Column list = new Column(8);
 			list.Add(BuildItemHeader(includeQuantity: true));
@@ -278,15 +267,14 @@ namespace ResourceQuantityEditor {
 
 			ScrollColumn scroll = new ScrollColumn();
 			scroll.ScrollerAlwaysVisible();
-			scroll.FlexGrow(1);
+			scroll.Height(400);
 			scroll.Add(list);
 			products.BodyAdd(new UiComponent[] { scroll });
-			return products.FlexGrow(1);
+			return products;
 		}
 
 		private UiComponent BuildSandboxCommandDeck() {
 			PanelWithHeader panel = new PanelWithHeader(L("COI EDITOR"));
-			panel.AttachTitleIcon(ICON_EMPTY);
 
 			Row primary = CenteredRow();
 			primary.Add(ActionButton("Enable common cheats", () => RunSandboxCommand(() => s_sandboxFeatures.EnableCommonCheats()), Button.Primary).Width(210));
@@ -302,51 +290,51 @@ namespace ResourceQuantityEditor {
 
 		private UiComponent BuildSettlementNeedsDeck() {
 			PanelWithHeader panel = new PanelWithHeader(L("SETTLEMENT NEEDS"));
-			panel.AttachTitleIcon(ICON_POPULATION);
 			panel.BodyGap(8);
 
-			Row togglesA = CenteredRow();
-			togglesA.Add(SandboxToggle("No food need", s_sandboxFeatures.IgnoreMissingFood, () => s_sandboxFeatures.SetIgnoreMissingFood(!s_sandboxFeatures.IgnoreMissingFood)).Width(190));
-			togglesA.Add(SandboxToggle("No workers need", s_sandboxFeatures.IgnoreMissingWorkers, () => s_sandboxFeatures.SetIgnoreMissingWorkers(!s_sandboxFeatures.IgnoreMissingWorkers)).Width(205));
-			togglesA.Add(SandboxToggle("No power need", s_sandboxFeatures.IgnoreMissingPower, () => s_sandboxFeatures.SetIgnoreMissingPower(!s_sandboxFeatures.IgnoreMissingPower)).Width(190));
-			FinishCenteredRow(togglesA);
+			Row grid = new Row(20); // Большой отступ между колонками
+			
+			Column col1 = new Column(8);
+			col1.Add(SandboxToggle("No food need", s_sandboxFeatures.IgnoreMissingFood, () => s_sandboxFeatures.SetIgnoreMissingFood(!s_sandboxFeatures.IgnoreMissingFood)));
+			col1.Add(SandboxToggle("No workers need", s_sandboxFeatures.IgnoreMissingWorkers, () => s_sandboxFeatures.SetIgnoreMissingWorkers(!s_sandboxFeatures.IgnoreMissingWorkers)));
+			col1.Add(SandboxToggle("No power need", s_sandboxFeatures.IgnoreMissingPower, () => s_sandboxFeatures.SetIgnoreMissingPower(!s_sandboxFeatures.IgnoreMissingPower)));
+			
+			Column col2 = new Column(8);
+			col2.Add(SandboxToggle("No computing need", s_sandboxFeatures.IgnoreMissingComputing, () => s_sandboxFeatures.SetIgnoreMissingComputing(!s_sandboxFeatures.IgnoreMissingComputing)));
+			col2.Add(SandboxToggle("No unity need", s_sandboxFeatures.IgnoreMissingUnity, () => s_sandboxFeatures.SetIgnoreMissingUnity(!s_sandboxFeatures.IgnoreMissingUnity)));
+			col2.Add(SandboxToggle("Unlimited unity", s_sandboxFeatures.UnlimitedUnity, () => s_sandboxFeatures.SetUnlimitedUnity(!s_sandboxFeatures.UnlimitedUnity)));
 
-			Row togglesB = CenteredRow();
-			togglesB.Add(SandboxToggle("No computing need", s_sandboxFeatures.IgnoreMissingComputing, () => s_sandboxFeatures.SetIgnoreMissingComputing(!s_sandboxFeatures.IgnoreMissingComputing)).Width(220));
-			togglesB.Add(SandboxToggle("No unity need", s_sandboxFeatures.IgnoreMissingUnity, () => s_sandboxFeatures.SetIgnoreMissingUnity(!s_sandboxFeatures.IgnoreMissingUnity)).Width(190));
-			togglesB.Add(SandboxToggle("Unlimited unity", s_sandboxFeatures.UnlimitedUnity, () => s_sandboxFeatures.SetUnlimitedUnity(!s_sandboxFeatures.UnlimitedUnity)).Width(190));
-			FinishCenteredRow(togglesB);
+			grid.Add(col1.FlexGrow(1));
+			grid.Add(col2.FlexGrow(1));
 
-			panel.BodyAdd(new UiComponent[] { togglesA, togglesB });
+			panel.BodyAdd(new UiComponent[] { grid });
 			return panel;
 		}
 
 		private UiComponent BuildEconomyCheatsDeck() {
 			PanelWithHeader panel = new PanelWithHeader(L("ECONOMY CHEATS"));
-			panel.AttachTitleIcon(ICON_EMPTY);
 			panel.BodyGap(8);
 
-			Row togglesA = CenteredRow();
-			togglesA.Add(SandboxToggle("Source/sink buildings", s_sandboxFeatures.AreSourcesAndSinksAllowed, () => s_sandboxFeatures.SetSourceSinks(!s_sandboxFeatures.AreSourcesAndSinksAllowed)).Width(230));
-			FinishCenteredRow(togglesA);
+			Row grid = new Row(20);
+			
+			Column col1 = new Column(8);
+			col1.Add(SandboxToggle("Source/sink buildings", s_sandboxFeatures.AreSourcesAndSinksAllowed, () => s_sandboxFeatures.SetSourceSinks(!s_sandboxFeatures.AreSourcesAndSinksAllowed)));
+			col1.Add(SandboxToggle("No maintenance", s_sandboxFeatures.IgnoreMissingMaintenance, () => s_sandboxFeatures.SetIgnoreMissingMaintenance(!s_sandboxFeatures.IgnoreMissingMaintenance)));
+			col1.Add(SandboxToggle("No construction costs", s_sandboxFeatures.NoConstructionCosts, () => s_sandboxFeatures.SetNoConstructionCosts(!s_sandboxFeatures.NoConstructionCosts)));
+			
+			Column col2 = new Column(8);
+			col2.Add(SandboxToggle("Free research", s_sandboxFeatures.FreeResearch, () => s_sandboxFeatures.SetFreeResearch(!s_sandboxFeatures.FreeResearch)));
+			col2.Add(SandboxToggle("Infinite focus", s_sandboxFeatures.InfiniteFocus, () => s_sandboxFeatures.SetInfiniteFocus(!s_sandboxFeatures.InfiniteFocus)));
 
-			Row togglesB = CenteredRow();
-			togglesB.Add(SandboxToggle("No maintenance", s_sandboxFeatures.IgnoreMissingMaintenance, () => s_sandboxFeatures.SetIgnoreMissingMaintenance(!s_sandboxFeatures.IgnoreMissingMaintenance)).Width(190));
-			FinishCenteredRow(togglesB);
+			grid.Add(col1.FlexGrow(1));
+			grid.Add(col2.FlexGrow(1));
 
-			Row togglesC = CenteredRow();
-			togglesC.Add(SandboxToggle("No construction costs", s_sandboxFeatures.NoConstructionCosts, () => s_sandboxFeatures.SetNoConstructionCosts(!s_sandboxFeatures.NoConstructionCosts)).Width(230));
-			togglesC.Add(SandboxToggle("Free research", s_sandboxFeatures.FreeResearch, () => s_sandboxFeatures.SetFreeResearch(!s_sandboxFeatures.FreeResearch)).Width(180));
-			togglesC.Add(SandboxToggle("Infinite focus", s_sandboxFeatures.InfiniteFocus, () => s_sandboxFeatures.SetInfiniteFocus(!s_sandboxFeatures.InfiniteFocus)).Width(180));
-			FinishCenteredRow(togglesC);
-
-			panel.BodyAdd(new UiComponent[] { togglesA, togglesB, togglesC });
+			panel.BodyAdd(new UiComponent[] { grid });
 			return panel;
 		}
 
 		private UiComponent BuildResearchDeck() {
 			PanelWithHeader panel = new PanelWithHeader(L("RESEARCH"));
-			panel.AttachTitleIcon(ICON_EMPTY);
 
 			Row row = CenteredRow();
 			row.Add(new Label(L("All research: " + (s_sandboxFeatures.IsAllResearchUnlocked ? "Unlocked" : "Locked"))).Width(260));
@@ -361,56 +349,82 @@ namespace ResourceQuantityEditor {
 
 		private UiComponent BuildEnvironmentCheatsDeck() {
 			PanelWithHeader panel = new PanelWithHeader(L("ENVIRONMENT CHEATS"));
-			panel.AttachTitleIcon(ICON_EMPTY);
 			panel.BodyGap(8);
 
-			Row togglesA = CenteredRow();
-			togglesA.Add(SandboxToggle("Disable food consumption", s_sandboxFeatures.UnlimitedFood, () => s_sandboxFeatures.SetUnlimitedFood(!s_sandboxFeatures.UnlimitedFood)).Width(260));
-			togglesA.Add(SandboxToggle("No bio waste", s_sandboxFeatures.NoBioWaste, () => s_sandboxFeatures.SetNoBioWaste(!s_sandboxFeatures.NoBioWaste)).Width(180));
-			togglesA.Add(SandboxToggle("No landfill waste", s_sandboxFeatures.NoLandfillWaste, () => s_sandboxFeatures.SetNoLandfillWaste(!s_sandboxFeatures.NoLandfillWaste)).Width(210));
-			FinishCenteredRow(togglesA);
+			Row grid = new Row(20);
+			
+			Column col1 = new Column(8);
+			col1.Add(SandboxToggle("Disable food consumption", s_sandboxFeatures.UnlimitedFood, () => s_sandboxFeatures.SetUnlimitedFood(!s_sandboxFeatures.UnlimitedFood)));
+			col1.Add(SandboxToggle("Instant tree growth", s_sandboxFeatures.InstantTreeGrowth, () => s_sandboxFeatures.SetInstantTreeGrowth(!s_sandboxFeatures.InstantTreeGrowth)));
+			col1.Add(SandboxToggle("No air pollution", s_sandboxFeatures.NoAirPollution, () => s_sandboxFeatures.SetNoAirPollution(!s_sandboxFeatures.NoAirPollution)));
+			col1.Add(SandboxToggle("No water pollution", s_sandboxFeatures.NoWaterPollution, () => s_sandboxFeatures.SetNoWaterPollution(!s_sandboxFeatures.NoWaterPollution)));
+			col1.Add(SandboxToggle("No ship pollution", s_sandboxFeatures.NoShipPollution, () => s_sandboxFeatures.SetNoShipPollution(!s_sandboxFeatures.NoShipPollution)));
+			col1.Add(SandboxToggle("No train pollution", s_sandboxFeatures.NoTrainPollution, () => s_sandboxFeatures.SetNoTrainPollution(!s_sandboxFeatures.NoTrainPollution)));
+			col1.Add(SandboxToggle("No vehicle pollution", s_sandboxFeatures.NoVehiclePollution, () => s_sandboxFeatures.SetNoVehiclePollution(!s_sandboxFeatures.NoVehiclePollution)));
+			
+			Column col2 = new Column(8);
+			col2.Add(SandboxToggle("No bio waste", s_sandboxFeatures.NoBioWaste, () => s_sandboxFeatures.SetNoBioWaste(!s_sandboxFeatures.NoBioWaste)));
+			col2.Add(SandboxToggle("No landfill waste", s_sandboxFeatures.NoLandfillWaste, () => s_sandboxFeatures.SetNoLandfillWaste(!s_sandboxFeatures.NoLandfillWaste)));
+			col2.Add(SandboxToggle("No toxic slurry waste", s_sandboxFeatures.NoToxicWaste, () => s_sandboxFeatures.SetNoToxicWaste(!s_sandboxFeatures.NoToxicWaste)));
+			col2.Add(SandboxToggle("No depleted uranium waste", s_sandboxFeatures.NoRadioactiveWaste, () => s_sandboxFeatures.SetNoRadioactiveWaste(!s_sandboxFeatures.NoRadioactiveWaste)));
 
-			Row togglesB = CenteredRow();
-			togglesB.Add(SandboxToggle("No toxic slurry waste", s_sandboxFeatures.NoToxicWaste, () => s_sandboxFeatures.SetNoToxicWaste(!s_sandboxFeatures.NoToxicWaste)).Width(240));
-			togglesB.Add(SandboxToggle("No depleted uranium waste", s_sandboxFeatures.NoRadioactiveWaste, () => s_sandboxFeatures.SetNoRadioactiveWaste(!s_sandboxFeatures.NoRadioactiveWaste)).Width(260));
-			togglesB.Add(SandboxToggle("Instant tree growth", s_sandboxFeatures.InstantTreeGrowth, () => s_sandboxFeatures.SetInstantTreeGrowth(!s_sandboxFeatures.InstantTreeGrowth)).Width(220));
-			FinishCenteredRow(togglesB);
+			grid.Add(col1.FlexGrow(1));
+			grid.Add(col2.FlexGrow(1));
 
-			Row pollutionA = CenteredRow();
-			pollutionA.Add(SandboxToggle("No air pollution", s_sandboxFeatures.NoAirPollution, () => s_sandboxFeatures.SetNoAirPollution(!s_sandboxFeatures.NoAirPollution)).Width(200));
-			pollutionA.Add(SandboxToggle("No water pollution", s_sandboxFeatures.NoWaterPollution, () => s_sandboxFeatures.SetNoWaterPollution(!s_sandboxFeatures.NoWaterPollution)).Width(220));
-			pollutionA.Add(SandboxToggle("No ship pollution", s_sandboxFeatures.NoShipPollution, () => s_sandboxFeatures.SetNoShipPollution(!s_sandboxFeatures.NoShipPollution)).Width(200));
-			FinishCenteredRow(pollutionA);
-
-			Row pollutionB = CenteredRow();
-			pollutionB.Add(SandboxToggle("No train pollution", s_sandboxFeatures.NoTrainPollution, () => s_sandboxFeatures.SetNoTrainPollution(!s_sandboxFeatures.NoTrainPollution)).Width(210));
-			pollutionB.Add(SandboxToggle("No vehicle pollution", s_sandboxFeatures.NoVehiclePollution, () => s_sandboxFeatures.SetNoVehiclePollution(!s_sandboxFeatures.NoVehiclePollution)).Width(220));
-			FinishCenteredRow(pollutionB);
-
-			panel.BodyAdd(new UiComponent[] { togglesA, togglesB, pollutionA, pollutionB });
+			panel.BodyAdd(new UiComponent[] { grid });
 			return panel;
 		}
 
 		private UiComponent BuildWeatherControlsDeck() {
 			PanelWithHeader panel = new PanelWithHeader(L("WEATHER CONTROLS"));
-			panel.AttachTitleIcon(ICON_EMPTY);
 			panel.BodyGap(8);
 
 			Row current = CenteredRow();
-			current.Add(new Label(L("Current weather")).UpperCase(false).Width(130));
-			current.Add(new Label(L(s_sandboxFeatures.CurrentWeatherName)).Width(260));
-			current.Add(SandboxToggle("Sunny weather", s_sandboxFeatures.IsSunnyWeatherEnabled, () => s_sandboxFeatures.ToggleSunnyWeather()).Width(180));
-			current.Add(ActionButton("Reset weather", () => RunSandboxCommand(() => s_sandboxFeatures.ClearWeather()), Button.General).Width(170));
+			current.Add(new Label(L("Current")).UpperCase(false).Width(110));
+			current.Add(new Label(L(s_sandboxFeatures.CurrentWeatherName)).Width(240));
+			current.Add(ActionButton("Reset", () => RunSandboxCommand(() => s_sandboxFeatures.ClearWeather()), Button.General).Width(100));
+			current.Add(ActionButton(m_showWeatherList ? "Hide list" : "Show list", () => { m_showWeatherList = !m_showWeatherList; RefreshWindow(); }, Button.General).Width(130));
 			FinishCenteredRow(current);
 
+			Row grid = new Row(20);
+			Column col1 = new Column(8);
+			col1.Add(SandboxToggle("Sunny weather", s_sandboxFeatures.IsSunnyWeatherEnabled, () => s_sandboxFeatures.ToggleSunnyWeather()));
+			col1.Add(SandboxToggle("Clouds", s_sandboxFeatures.CloudsEnabled, () => s_sandboxFeatures.SetCloudsEnabled(!s_sandboxFeatures.CloudsEnabled)));
+			col1.Add(SandboxToggle("Fog", s_sandboxFeatures.FogEnabled, () => s_sandboxFeatures.SetFogEnabled(!s_sandboxFeatures.FogEnabled)));
+			col1.Add(SandboxToggle("Weather effects", s_sandboxFeatures.WeatherEffectsEnabled, () => s_sandboxFeatures.SetWeatherEffectsEnabled(!s_sandboxFeatures.WeatherEffectsEnabled)));
+			
+			Column col2 = new Column(8);
+			col2.Add(new Label(L("Intensity")).UpperCase(false).TinyFontSize());
+			
+			Row intensityRow = new Row(4);
+			intensityRow.Add(new Label(L("Sun")).UpperCase(false).Width(40));
+			intensityRow.Add(new TextField()
+				.Text(m_weatherSunIntensity)
+				.NumericOnly()
+				.CharLimit(5)
+				.OnValueChanged(x => m_weatherSunIntensity = x, isDelayed: false)
+				.Width(80));
+			intensityRow.Add(new Label(L("Rain")).UpperCase(false).Width(40));
+			intensityRow.Add(new TextField()
+				.Text(m_weatherRainIntensity)
+				.NumericOnly()
+				.CharLimit(5)
+				.OnValueChanged(x => m_weatherRainIntensity = x, isDelayed: false)
+				.Width(80));
+			col2.Add(intensityRow);
+			col2.Add(ActionButton("Apply intensity", RunWeatherIntensity, Button.General).Width(170));
+
+			grid.Add(col1.FlexGrow(1));
+			grid.Add(col2.FlexGrow(1));
+
 			Row selected = CenteredRow();
-			selected.Add(new Label(L("Selected")).UpperCase(false).Width(130));
-			selected.Add(new Label(L(string.IsNullOrEmpty(m_selectedWeatherName) ? "No weather selected" : m_selectedWeatherName)).Width(260));
-			selected.Add(ActionButton("Apply selected", RunSelectedWeather, Button.Primary).Width(180));
+			selected.Add(new Label(L("Selected")).UpperCase(false).Width(110));
+			selected.Add(new Label(L(string.IsNullOrEmpty(m_selectedWeatherName) ? "None" : m_selectedWeatherName)).Width(240));
+			selected.Add(ActionButton("Apply selected", RunSelectedWeather, Button.Primary).Width(170));
 			FinishCenteredRow(selected);
 
 			Row filter = CenteredRow();
-			filter.Add(new Label(L("Search")).UpperCase(false).Width(130));
+			filter.Add(new Label(L("Search")).UpperCase(false).Width(110));
 			TextField weatherFilterField = new TextField()
 				.Text(m_weatherFilter)
 				.OnValueChanged(delegate(string x) {
@@ -427,50 +441,35 @@ namespace ResourceQuantityEditor {
 			filter.Add(weatherFilterField);
 			FinishCenteredRow(filter);
 
-			Row intensity = CenteredRow();
-			intensity.Add(new Label(L("Sun intensity")).UpperCase(false).Width(130));
-			intensity.Add(new TextField()
-				.Text(m_weatherSunIntensity)
-				.NumericOnly()
-				.CharLimit(5)
-				.OnValueChanged(x => m_weatherSunIntensity = x, isDelayed: false)
-				.Width(90));
-			intensity.Add(new Label(L("Rain intensity")).UpperCase(false).Width(130));
-			intensity.Add(new TextField()
-				.Text(m_weatherRainIntensity)
-				.NumericOnly()
-				.CharLimit(5)
-				.OnValueChanged(x => m_weatherRainIntensity = x, isDelayed: false)
-				.Width(90));
-			intensity.Add(ActionButton("Apply intensity", RunWeatherIntensity, Button.General).Width(170));
-			FinishCenteredRow(intensity);
-
-			panel.BodyAdd(new UiComponent[] { current, selected, filter, intensity });
+			panel.BodyAdd(new UiComponent[] { current, grid, selected, filter });
 			return panel;
 		}
 
 		private UiComponent BuildTerrainControlsDeck() {
 			PanelWithHeader panel = new PanelWithHeader(L("TERRAIN CONTROLS"));
-			panel.AttachTitleIcon(ICON_EMPTY);
 			panel.BodyGap(8);
 
-			Row rowA = CenteredRow();
-			rowA.Add(SandboxToggle("Process all mining designations", s_sandboxFeatures.ProcessTerrainDesignations, () => s_sandboxFeatures.SetProcessTerrainDesignations(!s_sandboxFeatures.ProcessTerrainDesignations)).Width(280));
-			rowA.Add(SandboxToggle("Process all surface designations", s_sandboxFeatures.ProcessSurfaceDesignations, () => s_sandboxFeatures.SetProcessSurfaceDesignations(!s_sandboxFeatures.ProcessSurfaceDesignations)).Width(280));
-			FinishCenteredRow(rowA);
+			Row grid = new Row(20);
+			
+			Column col1 = new Column(8);
+			col1.Add(SandboxToggle("Process mining", s_sandboxFeatures.ProcessTerrainDesignations, () => s_sandboxFeatures.SetProcessTerrainDesignations(!s_sandboxFeatures.ProcessTerrainDesignations)));
+			col1.Add(SandboxToggle("Process surface", s_sandboxFeatures.ProcessSurfaceDesignations, () => s_sandboxFeatures.SetProcessSurfaceDesignations(!s_sandboxFeatures.ProcessSurfaceDesignations)));
+			col1.Add(SandboxToggle("Disable physics", s_sandboxFeatures.DisableTerrainPhysics, () => s_sandboxFeatures.SetDisableTerrainPhysics(!s_sandboxFeatures.DisableTerrainPhysics)));
+			
+			Column col2 = new Column(8);
+			col2.Add(SandboxToggle("Unlimited designations", s_sandboxFeatures.UnlimitedMiningArea, () => s_sandboxFeatures.SetUnlimitedMiningArea(!s_sandboxFeatures.UnlimitedMiningArea)));
+			col2.Add(SandboxToggle("Unlimited tower area", s_sandboxFeatures.UnlimitedTowerArea, () => s_sandboxFeatures.SetUnlimitedTowerArea(!s_sandboxFeatures.UnlimitedTowerArea)));
+			col2.Add(ActionButton("Clear designations", () => RunSandboxCommand(() => s_sandboxFeatures.ClearAllTerrainDesignations()), Button.Warning).Width(240));
 
-			Row rowB = CenteredRow();
-			rowB.Add(ActionButton("Clear all terrain designations", () => RunSandboxCommand(() => s_sandboxFeatures.ClearAllTerrainDesignations()), Button.Warning).Width(260));
-			rowB.Add(SandboxToggle("Disable terrain physics", s_sandboxFeatures.DisableTerrainPhysics, () => s_sandboxFeatures.SetDisableTerrainPhysics(!s_sandboxFeatures.DisableTerrainPhysics)).Width(230));
-			FinishCenteredRow(rowB);
+			grid.Add(col1.FlexGrow(1));
+			grid.Add(col2.FlexGrow(1));
 
-			panel.BodyAdd(new UiComponent[] { rowA, rowB });
+			panel.BodyAdd(new UiComponent[] { grid });
 			return panel;
 		}
 
 		private UiComponent BuildAsteroidControlsDeck() {
 			PanelWithHeader panel = new PanelWithHeader(L("ASTEROID CONTROL"));
-			panel.AttachTitleIcon(ICON_EMPTY);
 			panel.BodyGap(8);
 
 			Row materials = CenteredRow();
@@ -495,6 +494,7 @@ namespace ResourceQuantityEditor {
 				.Width(80));
 			create.Add(ActionButton("Place in orbit", RunSpawnAsteroid, Button.Primary).Width(170));
 			create.Add(ActionButton("Capture selected", RunCaptureAsteroid, Button.General).Width(170));
+			create.Add(ActionButton(m_showAsteroidsList ? "Hide active list" : "Show active list", () => { m_showAsteroidsList = !m_showAsteroidsList; RefreshWindow(); }, Button.General).Width(170));
 			FinishCenteredRow(create);
 
 			Row landing = CenteredRow();
@@ -578,7 +578,6 @@ namespace ResourceQuantityEditor {
 
 		private UiComponent BuildAsteroidMaterialDropdownList(int slot) {
 			PanelWithHeader panel = new PanelWithHeader(L(slot == 1 ? "SELECT MATERIAL 1" : "SELECT MATERIAL 2"));
-			panel.AttachTitleIcon(ICON_EMPTY);
 
 			Column list = new Column(6);
 			if (slot == 2) {
@@ -621,7 +620,6 @@ namespace ResourceQuantityEditor {
 
 		private UiComponent BuildAsteroidsListDeck() {
 			PanelWithHeader panel = new PanelWithHeader(L("ACTIVE ASTEROIDS"));
-			panel.AttachTitleIcon(ICON_EMPTY);
 
 			Column list = new Column(8);
 			Row header = CenteredRow();
@@ -660,7 +658,6 @@ namespace ResourceQuantityEditor {
 
 		private UiComponent BuildWeatherListDeck() {
 			PanelWithHeader panel = new PanelWithHeader(L("WEATHER LIST"));
-			panel.AttachTitleIcon(ICON_EMPTY);
 
 			Column list = new Column(8);
 			foreach (WeatherRow row in s_sandboxFeatures.GetWeatherRows(m_weatherFilter)) {
@@ -669,10 +666,10 @@ namespace ResourceQuantityEditor {
 
 			ScrollColumn scroll = new ScrollColumn();
 			scroll.ScrollerAlwaysVisible();
-			scroll.FlexGrow(1);
+			scroll.Height(300);
 			scroll.Add(list);
 			panel.BodyAdd(new UiComponent[] { scroll });
-			return panel.FlexGrow(1);
+			return panel;
 		}
 
 		private UiComponent BuildWeatherRow(WeatherRow weather) {
@@ -689,7 +686,6 @@ namespace ResourceQuantityEditor {
 
 		private UiComponent BuildLogisticsDeck() {
 			PanelWithHeader panel = new PanelWithHeader(L("EXPLORATION & LOGISTICS"));
-			panel.AttachTitleIcon(ICON_EMPTY);
 			panel.BodyGap(8);
 
 			Row actions = CenteredRow();
@@ -701,9 +697,17 @@ namespace ResourceQuantityEditor {
 				.OnValueChanged(x => m_cargoShipsAmount = x, isDelayed: false)
 				.Width(80));
 			actions.Add(ActionButton("Add repaired ships", RunAddCargoShips, Button.Primary).Width(190));
-			actions.Add(SandboxToggle("No fuel consumption", s_sandboxFeatures.IgnoreFuelConsumption, () => s_sandboxFeatures.SetIgnoreFuelConsumption(!s_sandboxFeatures.IgnoreFuelConsumption)).Width(220));
-			actions.Add(SandboxToggle("Unlimited vehicle fuel", s_sandboxFeatures.UnlimitedVehicleFuel, () => s_sandboxFeatures.SetUnlimitedVehicleFuel(!s_sandboxFeatures.UnlimitedVehicleFuel)).Width(230));
 			FinishCenteredRow(actions);
+
+			Row grid = new Row(20);
+			Column col1 = new Column(8);
+			col1.Add(SandboxToggle("No fuel consumption", s_sandboxFeatures.IgnoreFuelConsumption, () => s_sandboxFeatures.SetIgnoreFuelConsumption(!s_sandboxFeatures.IgnoreFuelConsumption)));
+			col1.Add(SandboxToggle("Unlimited vehicle fuel", s_sandboxFeatures.UnlimitedVehicleFuel, () => s_sandboxFeatures.SetUnlimitedVehicleFuel(!s_sandboxFeatures.UnlimitedVehicleFuel)));
+			
+			Column col2 = new Column(8);
+			col2.Add(SandboxToggle("Instant cargo ships", s_sandboxFeatures.InstantCargoShips, () => s_sandboxFeatures.SetInstantCargoShips(!s_sandboxFeatures.InstantCargoShips)));
+			grid.Add(col1.FlexGrow(1));
+			grid.Add(col2.FlexGrow(1));
 
 			Row world = CenteredRow();
 			world.Add(ActionButton("Reveal all locations", () => RunSandboxCommand(() => s_sandboxFeatures.RevealAllLocations()), Button.General).Width(200));
@@ -723,51 +727,43 @@ namespace ResourceQuantityEditor {
 			vehicles.Add(ActionButton("Increase limit", RunIncreaseVehicleLimit, Button.General).Width(170));
 			FinishCenteredRow(vehicles);
 
-			panel.BodyAdd(new UiComponent[] { actions, world, vehicles });
+			panel.BodyAdd(new UiComponent[] { actions, grid, world, vehicles });
 			return panel;
 		}
 
 		private UiComponent BuildSandboxCheatsDeck() {
 			PanelWithHeader panel = new PanelWithHeader(L("SANDBOX MODIFIERS"));
-			panel.AttachTitleIcon(ICON_EMPTY);
 			panel.BodyGap(8);
 
-			Row togglesA = CenteredRow();
-			togglesA.Add(SandboxToggle("Instant build and construction", s_sandboxFeatures.InstantBuildAndConstruction, () => s_sandboxFeatures.SetInstantBuildAndConstruction(!s_sandboxFeatures.InstantBuildAndConstruction)).Width(360));
-			togglesA.Add(SandboxToggle("Source/sink buildings", s_sandboxFeatures.AreSourcesAndSinksAllowed, () => s_sandboxFeatures.SetSourceSinks(!s_sandboxFeatures.AreSourcesAndSinksAllowed)).Width(230));
-			togglesA.Add(SandboxToggle("Ignore missing workers", s_sandboxFeatures.IgnoreMissingWorkers, () => s_sandboxFeatures.SetIgnoreMissingWorkers(!s_sandboxFeatures.IgnoreMissingWorkers)).Width(230));
-			FinishCenteredRow(togglesA);
+			Row grid = new Row(20);
+			
+			Column col1 = new Column(8);
+			col1.Add(SandboxToggle("Instant build & construction", s_sandboxFeatures.InstantBuildAndConstruction, () => s_sandboxFeatures.SetInstantBuildAndConstruction(!s_sandboxFeatures.InstantBuildAndConstruction)));
+			col1.Add(SandboxToggle("Ignore missing maintenance", s_sandboxFeatures.IgnoreMissingMaintenance, () => s_sandboxFeatures.SetIgnoreMissingMaintenance(!s_sandboxFeatures.IgnoreMissingMaintenance)));
+			col1.Add(SandboxToggle("Ignore missing workers", s_sandboxFeatures.IgnoreMissingWorkers, () => s_sandboxFeatures.SetIgnoreMissingWorkers(!s_sandboxFeatures.IgnoreMissingWorkers)));
+			col1.Add(SandboxToggle("Ignore missing power", s_sandboxFeatures.IgnoreMissingPower, () => s_sandboxFeatures.SetIgnoreMissingPower(!s_sandboxFeatures.IgnoreMissingPower)));
+			col1.Add(SandboxToggle("Ignore missing computing", s_sandboxFeatures.IgnoreMissingComputing, () => s_sandboxFeatures.SetIgnoreMissingComputing(!s_sandboxFeatures.IgnoreMissingComputing)));
+			col1.Add(SandboxToggle("Ignore missing unity", s_sandboxFeatures.IgnoreMissingUnity, () => s_sandboxFeatures.SetIgnoreMissingUnity(!s_sandboxFeatures.IgnoreMissingUnity)));
+			col1.Add(SandboxToggle("Ignore missing food", s_sandboxFeatures.IgnoreMissingFood, () => s_sandboxFeatures.SetIgnoreMissingFood(!s_sandboxFeatures.IgnoreMissingFood)));
+			
+			Column col2 = new Column(8);
+			col2.Add(SandboxToggle("Source/sink buildings", s_sandboxFeatures.AreSourcesAndSinksAllowed, () => s_sandboxFeatures.SetSourceSinks(!s_sandboxFeatures.AreSourcesAndSinksAllowed)));
+			col2.Add(SandboxToggle("Unlimited unity reserve", s_sandboxFeatures.UnlimitedUnity, () => s_sandboxFeatures.SetUnlimitedUnity(!s_sandboxFeatures.UnlimitedUnity)));
+			col2.Add(SandboxToggle("Disable food consumption", s_sandboxFeatures.UnlimitedFood, () => s_sandboxFeatures.SetUnlimitedFood(!s_sandboxFeatures.UnlimitedFood)));
+			col2.Add(SandboxToggle("No bio waste", s_sandboxFeatures.NoBioWaste, () => s_sandboxFeatures.SetNoBioWaste(!s_sandboxFeatures.NoBioWaste)));
+			col2.Add(SandboxToggle("No landfill waste", s_sandboxFeatures.NoLandfillWaste, () => s_sandboxFeatures.SetNoLandfillWaste(!s_sandboxFeatures.NoLandfillWaste)));
+			col2.Add(SandboxToggle("No toxic slurry waste", s_sandboxFeatures.NoToxicWaste, () => s_sandboxFeatures.SetNoToxicWaste(!s_sandboxFeatures.NoToxicWaste)));
+			col2.Add(SandboxToggle("No depleted uranium waste", s_sandboxFeatures.NoRadioactiveWaste, () => s_sandboxFeatures.SetNoRadioactiveWaste(!s_sandboxFeatures.NoRadioactiveWaste)));
 
-			Row togglesB = CenteredRow();
-			togglesB.Add(SandboxToggle("Ignore missing power", s_sandboxFeatures.IgnoreMissingPower, () => s_sandboxFeatures.SetIgnoreMissingPower(!s_sandboxFeatures.IgnoreMissingPower)).Width(220));
-			togglesB.Add(SandboxToggle("Ignore missing computing", s_sandboxFeatures.IgnoreMissingComputing, () => s_sandboxFeatures.SetIgnoreMissingComputing(!s_sandboxFeatures.IgnoreMissingComputing)).Width(245));
-			togglesB.Add(SandboxToggle("Ignore missing unity", s_sandboxFeatures.IgnoreMissingUnity, () => s_sandboxFeatures.SetIgnoreMissingUnity(!s_sandboxFeatures.IgnoreMissingUnity)).Width(220));
-			togglesB.Add(SandboxToggle("Ignore missing food", s_sandboxFeatures.IgnoreMissingFood, () => s_sandboxFeatures.SetIgnoreMissingFood(!s_sandboxFeatures.IgnoreMissingFood)).Width(210));
-			FinishCenteredRow(togglesB);
+			grid.Add(col1.FlexGrow(1));
+			grid.Add(col2.FlexGrow(1));
 
-			Row togglesC = CenteredRow();
-			togglesC.Add(SandboxToggle("Ignore missing maintenance", s_sandboxFeatures.IgnoreMissingMaintenance, () => s_sandboxFeatures.SetIgnoreMissingMaintenance(!s_sandboxFeatures.IgnoreMissingMaintenance)).Width(260));
-			FinishCenteredRow(togglesC);
-
-			Row togglesD = CenteredRow();
-			togglesD.Add(SandboxToggle("Disable food consumption", s_sandboxFeatures.UnlimitedFood, () => s_sandboxFeatures.SetUnlimitedFood(!s_sandboxFeatures.UnlimitedFood)).Width(260));
-			togglesD.Add(SandboxToggle("No bio waste", s_sandboxFeatures.NoBioWaste, () => s_sandboxFeatures.SetNoBioWaste(!s_sandboxFeatures.NoBioWaste)).Width(180));
-			togglesD.Add(SandboxToggle("No landfill waste", s_sandboxFeatures.NoLandfillWaste, () => s_sandboxFeatures.SetNoLandfillWaste(!s_sandboxFeatures.NoLandfillWaste)).Width(210));
-			togglesD.Add(SandboxToggle("No toxic slurry waste", s_sandboxFeatures.NoToxicWaste, () => s_sandboxFeatures.SetNoToxicWaste(!s_sandboxFeatures.NoToxicWaste)).Width(240));
-			FinishCenteredRow(togglesD);
-
-			Row togglesE = CenteredRow();
-			togglesE.Add(SandboxToggle("No depleted uranium waste", s_sandboxFeatures.NoRadioactiveWaste, () => s_sandboxFeatures.SetNoRadioactiveWaste(!s_sandboxFeatures.NoRadioactiveWaste)).Width(260));
-			togglesE.Add(SandboxToggle("Unlimited unity reserve", s_sandboxFeatures.UnlimitedUnity, () => s_sandboxFeatures.SetUnlimitedUnity(!s_sandboxFeatures.UnlimitedUnity)).Width(250));
-			FinishCenteredRow(togglesE);
-
-			panel.BodyAdd(new UiComponent[] { togglesA, togglesB, togglesC, togglesD, togglesE });
+			panel.BodyAdd(new UiComponent[] { grid });
 			return panel;
 		}
 
 		private UiComponent BuildSandboxPopulationDeck() {
 			PanelWithHeader panel = new PanelWithHeader(L("POPULATION"));
-			panel.AttachTitleIcon(ICON_POPULATION);
 
 			Row people = CenteredRow();
 			people.Add(new Label(L("Amount")).UpperCase(false).Width(72));
@@ -788,11 +784,10 @@ namespace ResourceQuantityEditor {
 
 		private UiComponent BuildSandboxWorldDeck() {
 			PanelWithHeader panel = new PanelWithHeader(L("WORLD"));
-			panel.AttachTitleIcon(ICON_EMPTY);
 
 			Row actions = CenteredRow();
 			actions.Add(ActionButton("Remove selected trees", StartTreeRangeRemoval, Button.Warning).Width(210));
-			actions.Add(SandboxToggle("Sunny weather", s_sandboxFeatures.IsSunnyWeatherEnabled, () => s_sandboxFeatures.ToggleSunnyWeather()).Width(190));
+			actions.Add(SandboxToggle("Sunny weather", s_sandboxFeatures.IsSunnyWeatherEnabled, () => s_sandboxFeatures.ToggleSunnyWeather()));
 			FinishCenteredRow(actions);
 
 			panel.BodyAdd(new UiComponent[] { actions });
@@ -814,8 +809,14 @@ namespace ResourceQuantityEditor {
 			row.Add(new Label(L("")).FlexGrow(1));
 		}
 
-		private ButtonText SandboxToggle(string title, bool enabled, Func<string> action) {
-			return ActionButton(title, () => RunSandboxCommand(action), enabled ? Button.Primary : Button.General);
+
+		private UiComponent SandboxToggle(string title, bool enabled, Func<string> action) {
+			Row row = new Row(6);
+			row.Add(new Toggle(false)
+				.Value(enabled)
+				.OnValueChanged(_ => RunSandboxCommand(action)));
+			row.Add(new Label(L(title)).UpperCase(false).IncFontSize());
+			return row;
 		}
 
 		private UiComponent BuildItemHeader(bool includeQuantity) {
@@ -845,7 +846,6 @@ namespace ResourceQuantityEditor {
 
 		private UiComponent BuildStatusRow() {
 			PanelWithHeader status = new PanelWithHeader(L("STATUS"));
-			status.AttachTitleIcon(ICON_EMPTY);
 			m_statusField = new TextField()
 				.Text(string.IsNullOrEmpty(m_status) ? "Ready." : m_status)
 				.Readonly(true);

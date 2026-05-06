@@ -40,6 +40,9 @@
     <Compile Include="SandboxFeatureService.cs" />
     <Compile Include="TreeRangeRemovalService.cs" />
     <Compile Include="ResourceQuantityEditorUi.cs" />
+    <Compile Include="Patches\InstantCargoShipsPatch.cs" />
+    <Compile Include="Patches\UnlimitedDesignationsPatch.cs" />
+    <Compile Include="Services\VisualTweaksService.cs" />
   </ItemGroup>
 
   <ItemGroup>
@@ -88,6 +91,9 @@
     <Reference Include="UnityEngine.UIElementsModule">
       <HintPath>$(COI_ROOT)\Captain of Industry_Data\Managed\UnityEngine.UIElementsModule.dll</HintPath>
     </Reference>
+    <Reference Include="0Harmony">
+      <HintPath>$(COI_MODS)\COIExtended.Cheats\0Harmony.dll</HintPath>
+    </Reference>
   </ItemGroup>
 
   <Target Name="ValidateCoiRoot" BeforeTargets="BeforeBuild">
@@ -98,6 +104,7 @@
     <MakeDir Directories="$(COI_MODS)\$(AssemblyName)" />
     <Copy SourceFiles="$(OutputPath)$(AssemblyName).dll" DestinationFolder="$(COI_MODS)\$(AssemblyName)" />
     <Copy SourceFiles="$(OutputPath)$(AssemblyName).pdb" DestinationFolder="$(COI_MODS)\$(AssemblyName)" Condition="Exists('$(OutputPath)$(AssemblyName).pdb')" />
+    <Copy SourceFiles="$(OutputPath)0Harmony.dll" DestinationFolder="$(COI_MODS)\$(AssemblyName)" Condition="Exists('$(OutputPath)0Harmony.dll')" />
     <Copy SourceFiles="manifest.json;config.json;readme.txt" DestinationFolder="$(COI_MODS)\$(AssemblyName)" />
   </Target>
 

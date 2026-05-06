@@ -48,6 +48,7 @@ namespace ResourceQuantityEditor {
 		private readonly TerrainDesignationsManager m_terrainDesignationsManager;
 		private readonly SurfaceDesignationsManager m_surfaceDesignationsManager;
 		private readonly AsteroidsManager m_asteroidsManager;
+		private readonly VisualTweaksService m_visualTweaks;
 		private readonly FieldInfo m_landfillPartialField;
 		private readonly FieldInfo m_landfillReportedField;
 		private readonly FieldInfo m_bioWasteField;
@@ -93,7 +94,8 @@ namespace ResourceQuantityEditor {
 			TerrainManager terrainManager,
 			TerrainDesignationsManager terrainDesignationsManager,
 			SurfaceDesignationsManager surfaceDesignationsManager,
-			AsteroidsManager asteroidsManager) {
+			AsteroidsManager asteroidsManager,
+			VisualTweaksService visualTweaks) {
 			m_sandbox = sandbox;
 			m_sourceSink = sourceSink;
 			m_instaBuild = instaBuild;
@@ -113,6 +115,7 @@ namespace ResourceQuantityEditor {
 			m_terrainDesignationsManager = terrainDesignationsManager;
 			m_surfaceDesignationsManager = surfaceDesignationsManager;
 			m_asteroidsManager = asteroidsManager;
+			m_visualTweaks = visualTweaks;
 			m_landfillPartialField = typeof(Settlement).GetField("m_landfillInSettlementPartial", BindingFlags.Instance | BindingFlags.NonPublic);
 			m_landfillReportedField = typeof(Settlement).GetField("m_landfillInSettlementReported", BindingFlags.Instance | BindingFlags.NonPublic);
 			m_bioWasteField = typeof(Settlement).GetField("m_bioWasteInSettlement", BindingFlags.Instance | BindingFlags.NonPublic);
@@ -145,6 +148,12 @@ namespace ResourceQuantityEditor {
 		public bool ProcessTerrainDesignations { get; private set; }
 		public bool ProcessSurfaceDesignations { get; private set; }
 		public bool DisableTerrainPhysics { get; private set; }
+		public bool InstantCargoShips { get; private set; }
+		public bool UnlimitedMiningArea { get; private set; }
+		public bool UnlimitedTowerArea { get; private set; }
+		public bool CloudsEnabled => m_visualTweaks.CloudsEnabled;
+		public bool FogEnabled => m_visualTweaks.FogEnabled;
+		public bool WeatherEffectsEnabled => m_visualTweaks.WeatherEffectsEnabled;
 
 		public bool CanCheat { get { return m_sandbox.CanCheat; } }
 		public bool IsInstaBuildEnabled { get { return m_sandbox.IsInstaBuildEnabled; } }
@@ -1318,6 +1327,39 @@ namespace ResourceQuantityEditor {
 			}
 			method.Invoke(target, args);
 			return true;
+		}
+
+		public string SetInstantCargoShips(bool enabled) {
+			InstantCargoShips = enabled;
+			InstantCargoShipsPatch.InstantCargoShipsEnabled = enabled;
+			return enabled ? "Instant cargo ships enabled." : "Instant cargo ships disabled.";
+		}
+
+		public string SetUnlimitedMiningArea(bool enabled) {
+			UnlimitedMiningArea = enabled;
+			UnlimitedDesignationsPatch.SetUnlimitedMining(enabled);
+			return enabled ? "Unlimited mining/surface designations enabled." : "Unlimited mining/surface designations disabled.";
+		}
+
+		public string SetUnlimitedTowerArea(bool enabled) {
+			UnlimitedTowerArea = enabled;
+			UnlimitedDesignationsPatch.SetUnlimitedTowerArea(enabled);
+			return enabled ? "Unlimited tower area enabled." : "Unlimited tower area disabled.";
+		}
+
+		public string SetCloudsEnabled(bool enabled) {
+			m_visualTweaks.SetCloudsEnabled(enabled);
+			return enabled ? "Clouds enabled." : "Clouds disabled.";
+		}
+
+		public string SetFogEnabled(bool enabled) {
+			m_visualTweaks.SetFogRendering(enabled);
+			return enabled ? "Fog rendering enabled." : "Fog rendering disabled.";
+		}
+
+		public string SetWeatherEffectsEnabled(bool enabled) {
+			m_visualTweaks.SetWeatherEffectsVisible(enabled);
+			return enabled ? "Weather effects enabled." : "Weather effects disabled.";
 		}
 	}
 
