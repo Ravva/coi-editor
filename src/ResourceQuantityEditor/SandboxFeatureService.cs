@@ -49,6 +49,7 @@ namespace ResourceQuantityEditor {
 		private readonly SurfaceDesignationsManager m_surfaceDesignationsManager;
 		private readonly AsteroidsManager m_asteroidsManager;
 		private readonly VisualTweaksService m_visualTweaks;
+		private readonly PopsHealthManager m_popsHealthManager;
 		private readonly FieldInfo m_landfillPartialField;
 		private readonly FieldInfo m_landfillReportedField;
 		private readonly FieldInfo m_bioWasteField;
@@ -95,7 +96,8 @@ namespace ResourceQuantityEditor {
 			TerrainDesignationsManager terrainDesignationsManager,
 			SurfaceDesignationsManager surfaceDesignationsManager,
 			AsteroidsManager asteroidsManager,
-			VisualTweaksService visualTweaks) {
+			VisualTweaksService visualTweaks,
+			PopsHealthManager popsHealth) {
 			m_sandbox = sandbox;
 			m_sourceSink = sourceSink;
 			m_instaBuild = instaBuild;
@@ -116,6 +118,7 @@ namespace ResourceQuantityEditor {
 			m_surfaceDesignationsManager = surfaceDesignationsManager;
 			m_asteroidsManager = asteroidsManager;
 			m_visualTweaks = visualTweaks;
+			m_popsHealthManager = popsHealth;
 			m_landfillPartialField = typeof(Settlement).GetField("m_landfillInSettlementPartial", BindingFlags.Instance | BindingFlags.NonPublic);
 			m_landfillReportedField = typeof(Settlement).GetField("m_landfillInSettlementReported", BindingFlags.Instance | BindingFlags.NonPublic);
 			m_bioWasteField = typeof(Settlement).GetField("m_bioWasteInSettlement", BindingFlags.Instance | BindingFlags.NonPublic);
@@ -151,6 +154,9 @@ namespace ResourceQuantityEditor {
 		public bool InstantCargoShips { get; private set; }
 		public bool UnlimitedMiningArea { get; private set; }
 		public bool UnlimitedTowerArea { get; private set; }
+		public bool NoCleanWaterNeed { get; private set; }
+		public bool NoWastewaterProduction { get; private set; }
+		public bool NoDiseaseEffects { get; private set; }
 		public bool CloudsEnabled => m_visualTweaks.CloudsEnabled;
 		public bool FogEnabled => m_visualTweaks.FogEnabled;
 		public bool WeatherEffectsEnabled => m_visualTweaks.WeatherEffectsEnabled;
@@ -328,6 +334,7 @@ namespace ResourceQuantityEditor {
 
 		public string SetNoAirPollution(bool enabled) {
 			NoAirPollution = enabled;
+			HealthCheatsPatch.NoAirPollution = enabled;
 			SetPollutionDifficultyOverride(enabled);
 			SetPercentPropertyOverride(GetFieldValue(m_airPollutionManager, "m_airPollutionMultiplier") as IProperty<Percent>, enabled, Percent.Zero);
 			if (enabled) {
@@ -338,6 +345,7 @@ namespace ResourceQuantityEditor {
 
 		public string SetNoShipPollution(bool enabled) {
 			NoShipPollution = enabled;
+			HealthCheatsPatch.NoShipPollution = enabled;
 			SetPercentPropertyOverride(GetFieldValue(m_airPollutionManager, "m_shipsPollutionMultiplier") as IProperty<Percent>, enabled, Percent.Zero);
 			if (enabled) {
 				ClearNamedBuffer(m_airPollutionManager, "m_shipsPollutionBuffer", Quantity.Zero);
@@ -348,6 +356,7 @@ namespace ResourceQuantityEditor {
 
 		public string SetNoTrainPollution(bool enabled) {
 			NoTrainPollution = enabled;
+			HealthCheatsPatch.NoTrainPollution = enabled;
 			SetPercentPropertyOverride(GetFieldValue(m_airPollutionManager, "m_trainsPollutionMultiplier") as IProperty<Percent>, enabled, Percent.Zero);
 			if (enabled) {
 				ClearNamedBuffer(m_airPollutionManager, "m_trainsPollutionBuffer", Quantity.Zero);
@@ -358,6 +367,7 @@ namespace ResourceQuantityEditor {
 
 		public string SetNoVehiclePollution(bool enabled) {
 			NoVehiclePollution = enabled;
+			HealthCheatsPatch.NoVehiclePollution = enabled;
 			SetPercentPropertyOverride(GetFieldValue(m_airPollutionManager, "m_vehiclesPollutionMultiplier") as IProperty<Percent>, enabled, Percent.Zero);
 			if (enabled) {
 				ClearNamedBuffer(m_airPollutionManager, "m_vehiclesPollutionBuffer", Quantity.Zero);
@@ -368,6 +378,7 @@ namespace ResourceQuantityEditor {
 
 		public string SetNoWaterPollution(bool enabled) {
 			NoWaterPollution = enabled;
+			HealthCheatsPatch.NoWaterPollution = enabled;
 			SetPercentPropertyOverride(GetFieldValue(m_waterPollutionManager, "m_waterPollutionMultiplier") as IProperty<Percent>, enabled, Percent.Zero);
 			if (enabled) {
 				ClearProductBufferField(m_waterPollutionManager, "m_pollutedWaterBuffer");
@@ -1360,6 +1371,25 @@ namespace ResourceQuantityEditor {
 		public string SetWeatherEffectsEnabled(bool enabled) {
 			m_visualTweaks.SetWeatherEffectsVisible(enabled);
 			return enabled ? "Weather effects enabled." : "Weather effects disabled.";
+		}
+
+		public string SetNoCleanWaterNeed(bool enabled) {
+			NoCleanWaterNeed = enabled;
+			SettlementCheatsPatch.NoCleanWaterNeed = enabled;
+			return enabled ? "No clean water need enabled." : "No clean water need disabled.";
+		}
+
+		public string SetNoWastewaterProduction(bool enabled) {
+			NoWastewaterProduction = enabled;
+			SettlementCheatsPatch.NoWastewaterProduction = enabled;
+			return enabled ? "No wastewater production enabled." : "No wastewater production disabled.";
+		}
+
+		public string SetNoDiseaseEffects(bool enabled) {
+			NoDiseaseEffects = enabled;
+			// Используем встроенный метод игры через Reflection
+			TryInvokeNonPublic(m_popsHealthManager, "SetDisableDiseases", enabled);
+			return enabled ? "Diseases disabled." : "Diseases enabled.";
 		}
 	}
 

@@ -1,6 +1,7 @@
 using System;
 using System.IO;
 using System.Reflection;
+using HarmonyLib;
 using Mafi;
 using Mafi.Collections;
 using Mafi.Core.Game;
@@ -22,13 +23,24 @@ namespace ResourceQuantityEditor {
 			ModConfig = default(Option<IConfig>);
 			JsonConfig = new ModJsonConfig(this);
 			
-			// Добавляем резолвер для поиска 0Harmony.dll в папке мода
+			// Принудительно загружаем 0Harmony.dll из папки мода
+			string modDir = manifest.RootDirectoryPath;
+			string harmonyPath = Path.Combine(modDir, "0Harmony.dll");
+			if (File.Exists(harmonyPath)) {
+				try {
+					Assembly.LoadFrom(harmonyPath);
+					Log.Info("ResourceQuantityEditor: 0Harmony.dll loaded manually from " + harmonyPath);
+				} catch (Exception ex) {
+					Log.Error("ResourceQuantityEditor: Failed to load 0Harmony.dll manually: " + ex.Message);
+				}
+			}
+
+			// Резолвер на случай, если автоматическая загрузка не сработает
 			AppDomain.CurrentDomain.AssemblyResolve += (sender, args) => {
-				string assemblyName = new AssemblyName(args.Name).Name;
-				if (assemblyName == "0Harmony") {
-					string assemblyPath = Path.Combine(Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location), "0Harmony.dll");
-					if (File.Exists(assemblyPath)) {
-						return Assembly.LoadFrom(assemblyPath);
+				string name = new AssemblyName(args.Name).Name;
+				if (name == "0Harmony" || name.Contains("Harmony")) {
+					if (File.Exists(harmonyPath)) {
+						return Assembly.LoadFrom(harmonyPath);
 					}
 				}
 				return null;
@@ -53,10 +65,14 @@ namespace ResourceQuantityEditor {
 
 		public void EarlyInit(DependencyResolver resolver) {
 			try {
-				// Инициализируем патчи как можно раньше
-				InstantCargoShipsPatch.ApplyPatch();
+				// Инициализируем все Harmony патчи разом
+				Harmony harmony = new Harmony("ResourceQuantityEditor");
+				harmony.PatchAll(Assembly.GetExecutingAssembly());
+				
+				// Инициализируем остальные патчи (на базе Reflection)
 				UnlimitedDesignationsPatch.Initialize();
-				Log.Info("ResourceQuantityEditor: Patches initialized in EarlyInit");
+				
+				Log.Info("ResourceQuantityEditor: All patches initialized in EarlyInit");
 			} catch (Exception ex) {
 				Log.Error("ResourceQuantityEditor: Failed to initialize patches: " + ex.Message);
 			}

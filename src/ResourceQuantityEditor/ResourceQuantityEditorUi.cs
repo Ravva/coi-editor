@@ -1,4 +1,6 @@
 using System;
+using System.Linq;
+using Mafi.Collections.ImmutableCollections;
 using Mafi.Core.Products;
 using Mafi.Localization;
 using Mafi.Unity.Ui;
@@ -26,7 +28,6 @@ namespace ResourceQuantityEditor {
 		private int m_tab;
 		private int m_maintainFrame;
 		private string m_productFilter = "";
-		private bool m_productFilterWasEntered;
 		private string m_weatherFilter = "";
 		private bool m_weatherFilterWasEntered;
 		private string m_asteroidMaterialFilter = "";
@@ -46,6 +47,7 @@ namespace ResourceQuantityEditor {
 		private bool m_hasSelectedAsteroid;
 		private string m_selectedProductId = "";
 		private string m_selectedProductName = "";
+		private Dropdown<ProductProto> m_productDropdown;
 		private string m_resourceAmount = "100";
 		private string m_populationAmount = "100";
 		private string m_weatherSunIntensity = "100";
@@ -235,25 +237,47 @@ namespace ResourceQuantityEditor {
 			actionsRow.Add(ActionButton("Add", RunGlobalAdd, Button.General).Width(100));
 			actionsRow.Add(ActionButton("Remove", RunGlobalRemove, Button.Warning).Width(110));
 			actionsRow.Add(ActionButton(m_showProductsList ? "Hide inventory" : "Show inventory", () => { m_showProductsList = !m_showProductsList; RefreshWindow(); }, Button.General).Width(160));
-			actionsRow.Add(new Label(L("Search")).UpperCase(false).Width(56));
-			TextField productFilterField = new TextField()
-				.Text(m_productFilter)
-				.OnValueChanged(delegate(string x) {
-					if (!string.IsNullOrEmpty(x)) {
-						m_productFilterWasEntered = true;
-					}
-					m_productFilter = x;
+			
+			// Настройка Dropdown
+			actionsRow.Add(new Label(L("Select")).UpperCase(false).Width(56));
+			
+			m_productDropdown = new Dropdown<ProductProto>(ProductOptionFactory)
+				.OnValueChanged((p, idx) => {
+					SelectProduct(p);
 					RefreshWindow();
-				}, isDelayed: true)
-				.Width(260);
-			if (!m_productFilterWasEntered) {
-				productFilterField.Placeholder(L("id or name"));
+				})
+				.SetSearchStringLookup(p => p.Strings.Name.TranslatedString)
+				.Width(350);
+			
+			// Получаем все продукты (сервис теперь сам фильтрует и сортирует их по алфавиту)
+			var sortedProducts = s_globalEditor.GetGlobalProducts("")
+				.Select(x => x.Product)
+				.ToImmutableArray();
+				
+			m_productDropdown.SetOptions(sortedProducts);
+			
+			// Устанавливаем текущее значение
+			if (selected != null) {
+				m_productDropdown.SetValue(selected);
 			}
-			actionsRow.Add(productFilterField);
+			
+			actionsRow.Add(m_productDropdown);
 			FinishCenteredRow(actionsRow);
 
 			panel.BodyAdd(new UiComponent[] { selectedRow, actionsRow });
 			return panel;
+		}
+
+		private UiComponent ProductOptionFactory(ProductProto product, int index, bool isInDropdown) {
+			Row row = new Row(8);
+			if (product != null) {
+				row.Add(new Icon(product, noTooltip: true, noRightClick: true).Size(24));
+				row.Add(new Label(L(product.Strings.Name.TranslatedString)).FlexGrow(1));
+			} else {
+				row.Add(new Icon(ICON_EMPTY).Size(24));
+				row.Add(new Label(L("None")).FlexGrow(1));
+			}
+			return row;
 		}
 
 		private UiComponent BuildGlobalProductsList() {
@@ -298,11 +322,15 @@ namespace ResourceQuantityEditor {
 			col1.Add(SandboxToggle("No food need", s_sandboxFeatures.IgnoreMissingFood, () => s_sandboxFeatures.SetIgnoreMissingFood(!s_sandboxFeatures.IgnoreMissingFood)));
 			col1.Add(SandboxToggle("No workers need", s_sandboxFeatures.IgnoreMissingWorkers, () => s_sandboxFeatures.SetIgnoreMissingWorkers(!s_sandboxFeatures.IgnoreMissingWorkers)));
 			col1.Add(SandboxToggle("No power need", s_sandboxFeatures.IgnoreMissingPower, () => s_sandboxFeatures.SetIgnoreMissingPower(!s_sandboxFeatures.IgnoreMissingPower)));
+			col1.Add(SandboxToggle("No clean water need", s_sandboxFeatures.NoCleanWaterNeed, () => s_sandboxFeatures.SetNoCleanWaterNeed(!s_sandboxFeatures.NoCleanWaterNeed)));
 			
 			Column col2 = new Column(8);
 			col2.Add(SandboxToggle("No computing need", s_sandboxFeatures.IgnoreMissingComputing, () => s_sandboxFeatures.SetIgnoreMissingComputing(!s_sandboxFeatures.IgnoreMissingComputing)));
 			col2.Add(SandboxToggle("No unity need", s_sandboxFeatures.IgnoreMissingUnity, () => s_sandboxFeatures.SetIgnoreMissingUnity(!s_sandboxFeatures.IgnoreMissingUnity)));
 			col2.Add(SandboxToggle("Unlimited unity", s_sandboxFeatures.UnlimitedUnity, () => s_sandboxFeatures.SetUnlimitedUnity(!s_sandboxFeatures.UnlimitedUnity)));
+			col2.Add(SandboxToggle("No disease effects", s_sandboxFeatures.NoDiseaseEffects, () => s_sandboxFeatures.SetNoDiseaseEffects(!s_sandboxFeatures.NoDiseaseEffects)));
+			col2.Add(SandboxToggle("No wastewater prod.", s_sandboxFeatures.NoWastewaterProduction, () => s_sandboxFeatures.SetNoWastewaterProduction(!s_sandboxFeatures.NoWastewaterProduction)));
+
 
 			grid.Add(col1.FlexGrow(1));
 			grid.Add(col2.FlexGrow(1));
@@ -433,7 +461,7 @@ namespace ResourceQuantityEditor {
 					}
 					m_weatherFilter = x;
 					RefreshWindow();
-				}, isDelayed: true)
+				}, isDelayed: false)
 				.Width(260);
 			if (!m_weatherFilterWasEntered) {
 				weatherFilterField.Placeholder(L("id or name"));
@@ -527,7 +555,7 @@ namespace ResourceQuantityEditor {
 					}
 					m_asteroidMaterialFilter = x;
 					RefreshWindow();
-				}, isDelayed: true)
+				}, isDelayed: false)
 				.Width(260);
 			if (!m_asteroidMaterialFilterWasEntered) {
 				materialFilterField.Placeholder(L("id or name"));

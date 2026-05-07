@@ -42,6 +42,8 @@
     <Compile Include="ResourceQuantityEditorUi.cs" />
     <Compile Include="Patches\InstantCargoShipsPatch.cs" />
     <Compile Include="Patches\UnlimitedDesignationsPatch.cs" />
+    <Compile Include="Patches\SettlementCheatsPatch.cs" />
+    <Compile Include="Patches\HealthCheatsPatch.cs" />
     <Compile Include="Services\VisualTweaksService.cs" />
   </ItemGroup>
 

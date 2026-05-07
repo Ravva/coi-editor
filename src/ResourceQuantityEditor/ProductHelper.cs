@@ -10,7 +10,7 @@ namespace ResourceQuantityEditor {
 			}
 
 			return product.Id.ToString().IndexOf(filter, StringComparison.OrdinalIgnoreCase) >= 0
-				|| product.Strings.Name.ToString().IndexOf(filter, StringComparison.OrdinalIgnoreCase) >= 0;
+				|| product.Strings.Name.TranslatedString.IndexOf(filter, StringComparison.OrdinalIgnoreCase) >= 0;
 		}
 
 		public static void ValidateAmount(int amount) {

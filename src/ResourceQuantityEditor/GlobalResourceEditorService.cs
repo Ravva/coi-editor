@@ -25,17 +25,15 @@ namespace ResourceQuantityEditor {
 
 			return string.Join(
 				Environment.NewLine,
-				rows.Select(x => string.Format("{0} | {1} | available={2}", x.Product.Id, x.Product.Strings.Name, x.Amount)).ToArray());
+				rows.Select(x => string.Format("{0} | {1} | available={2}", x.Product.Id, x.Product.Strings.Name.TranslatedString, x.Amount)).ToArray());
 		}
 
 		public GlobalProductRow[] GetGlobalProducts(string filter) {
 			string normalizedFilter = (filter ?? string.Empty).Trim();
 			return m_protosDb.All<ProductProto>()
-				.Where(x => x.IsStorable)
 				.Where(x => ProductHelper.MatchesFilter(x, normalizedFilter))
 				.Select(x => new GlobalProductRow(x, m_assets.GetAvailableQuantityForRemoval(x).Value))
-				.Where(x => x.Amount > 0 || !string.IsNullOrEmpty(normalizedFilter))
-				.OrderBy(x => x.Product.Id.ToString())
+				.OrderBy(x => x.Product.Strings.Name.TranslatedString)
 				.ToArray();
 		}
 

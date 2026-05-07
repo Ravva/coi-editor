@@ -17,24 +17,9 @@ namespace ResourceQuantityEditor
 	{
 		public static bool InstantCargoShipsEnabled = false;
 
-		public static void ApplyPatch()
-		{
-			Harmony harmony = new Harmony("ResourceQuantityEditor.InstantCargoShips");
-			
-			// Патчим проверку отправления для контрактов
-			MethodInfo originalCanDepart = typeof(ContractsManager).GetMethod("CanShipDepartForContract");
-			MethodInfo prefixCanDepart = typeof(InstantCargoShipsPatch).GetMethod(nameof(PrefixCanShipDepart));
-			harmony.Patch(originalCanDepart, new HarmonyMethod(prefixCanDepart));
-
-			// Патчим время путешествия для всех флотов (экспедиции, бои)
-			MethodInfo originalTravelTime = typeof(BattleShip).GetMethod("GetTravelTimeFromDistance");
-			MethodInfo postfixTravelTime = typeof(InstantCargoShipsPatch).GetMethod(nameof(PostfixTravelTime));
-			harmony.Patch(originalTravelTime, postfix: new HarmonyMethod(postfixTravelTime));
-			
-			Log.Info("ResourceQuantityEditor: Instant Cargo Ships patches applied.");
-		}
-
 		// Мгновенный обмен товарами при попытке отправления
+		[HarmonyPatch(typeof(ContractsManager), "CanShipDepartForContract")]
+		[HarmonyPrefix]
 		public static bool PrefixCanShipDepart(CargoShipV2 ship, ContractProto contract, bool payUnityCost, bool wasDepartureRequested, ref ContractsManager.ShipDepartureCheckResult __result, ContractsManager __instance)
 		{
 			if (!InstantCargoShipsEnabled)
@@ -101,6 +86,8 @@ namespace ResourceQuantityEditor
 		}
 
 		// Мгновенное перемещение по карте мира
+		[HarmonyPatch(typeof(BattleShip), "GetTravelTimeFromDistance")]
+		[HarmonyPostfix]
 		public static void PostfixTravelTime(ref RelGameDate __result)
 		{
 			if (InstantCargoShipsEnabled)
