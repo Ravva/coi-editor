@@ -171,7 +171,6 @@ namespace ResourceQuantityEditor {
 			Column root = new Column(12);
 			ScrollColumn scroll = new ScrollColumn().FlexGrow(1);
 			scroll.Add(BuildEnvironmentCheatsDeck());
-			scroll.Add(BuildSandboxWorldDeck());
 			scroll.Add(BuildWeatherControlsDeck());
 			if (m_showWeatherList) {
 				scroll.Add(BuildWeatherListDeck());
@@ -189,11 +188,20 @@ namespace ResourceQuantityEditor {
 			Column root = new Column(12);
 			ScrollColumn scroll = new ScrollColumn().FlexGrow(1);
 			scroll.Add(BuildSandboxCommandDeck());
-			scroll.Add(BuildSandboxCheatsDeck());
-			scroll.Add(BuildSandboxPopulationDeck());
-			scroll.Add(BuildSandboxWorldDeck());
+			scroll.Add(BuildTreeActionsDeck());
 			root.Add(scroll);
 			return root.FlexGrow(1);
+		}
+
+		private UiComponent BuildTreeActionsDeck() {
+			PanelWithHeader panel = new PanelWithHeader(L("TREE ACTIONS"));
+
+			Row actions = CenteredRow();
+			actions.Add(ActionButton("Remove selected trees", StartTreeRangeRemoval, Button.Warning).Width(240));
+			FinishCenteredRow(actions);
+
+			panel.BodyAdd(new UiComponent[] { actions });
+			return panel;
 		}
 
 		private UiComponent BuildSettlementTab() {
@@ -346,11 +354,12 @@ namespace ResourceQuantityEditor {
 			Row grid = new Row(20);
 			
 			Column col1 = new Column(8);
+			col1.Add(SandboxToggle("Instant build & construction", s_sandboxFeatures.InstantBuildAndConstruction, () => s_sandboxFeatures.SetInstantBuildAndConstruction(!s_sandboxFeatures.InstantBuildAndConstruction)));
 			col1.Add(SandboxToggle("Source/sink buildings", s_sandboxFeatures.AreSourcesAndSinksAllowed, () => s_sandboxFeatures.SetSourceSinks(!s_sandboxFeatures.AreSourcesAndSinksAllowed)));
 			col1.Add(SandboxToggle("No maintenance", s_sandboxFeatures.IgnoreMissingMaintenance, () => s_sandboxFeatures.SetIgnoreMissingMaintenance(!s_sandboxFeatures.IgnoreMissingMaintenance)));
-			col1.Add(SandboxToggle("No construction costs", s_sandboxFeatures.NoConstructionCosts, () => s_sandboxFeatures.SetNoConstructionCosts(!s_sandboxFeatures.NoConstructionCosts)));
 			
 			Column col2 = new Column(8);
+			col2.Add(SandboxToggle("No construction costs", s_sandboxFeatures.NoConstructionCosts, () => s_sandboxFeatures.SetNoConstructionCosts(!s_sandboxFeatures.NoConstructionCosts)));
 			col2.Add(SandboxToggle("Free research", s_sandboxFeatures.FreeResearch, () => s_sandboxFeatures.SetFreeResearch(!s_sandboxFeatures.FreeResearch)));
 			col2.Add(SandboxToggle("Infinite focus", s_sandboxFeatures.InfiniteFocus, () => s_sandboxFeatures.SetInfiniteFocus(!s_sandboxFeatures.InfiniteFocus)));
 
@@ -756,37 +765,6 @@ namespace ResourceQuantityEditor {
 			FinishCenteredRow(vehicles);
 
 			panel.BodyAdd(new UiComponent[] { actions, grid, world, vehicles });
-			return panel;
-		}
-
-		private UiComponent BuildSandboxCheatsDeck() {
-			PanelWithHeader panel = new PanelWithHeader(L("SANDBOX MODIFIERS"));
-			panel.BodyGap(8);
-
-			Row grid = new Row(20);
-			
-			Column col1 = new Column(8);
-			col1.Add(SandboxToggle("Instant build & construction", s_sandboxFeatures.InstantBuildAndConstruction, () => s_sandboxFeatures.SetInstantBuildAndConstruction(!s_sandboxFeatures.InstantBuildAndConstruction)));
-			col1.Add(SandboxToggle("Ignore missing maintenance", s_sandboxFeatures.IgnoreMissingMaintenance, () => s_sandboxFeatures.SetIgnoreMissingMaintenance(!s_sandboxFeatures.IgnoreMissingMaintenance)));
-			col1.Add(SandboxToggle("Ignore missing workers", s_sandboxFeatures.IgnoreMissingWorkers, () => s_sandboxFeatures.SetIgnoreMissingWorkers(!s_sandboxFeatures.IgnoreMissingWorkers)));
-			col1.Add(SandboxToggle("Ignore missing power", s_sandboxFeatures.IgnoreMissingPower, () => s_sandboxFeatures.SetIgnoreMissingPower(!s_sandboxFeatures.IgnoreMissingPower)));
-			col1.Add(SandboxToggle("Ignore missing computing", s_sandboxFeatures.IgnoreMissingComputing, () => s_sandboxFeatures.SetIgnoreMissingComputing(!s_sandboxFeatures.IgnoreMissingComputing)));
-			col1.Add(SandboxToggle("Ignore missing unity", s_sandboxFeatures.IgnoreMissingUnity, () => s_sandboxFeatures.SetIgnoreMissingUnity(!s_sandboxFeatures.IgnoreMissingUnity)));
-			col1.Add(SandboxToggle("Ignore missing food", s_sandboxFeatures.IgnoreMissingFood, () => s_sandboxFeatures.SetIgnoreMissingFood(!s_sandboxFeatures.IgnoreMissingFood)));
-			
-			Column col2 = new Column(8);
-			col2.Add(SandboxToggle("Source/sink buildings", s_sandboxFeatures.AreSourcesAndSinksAllowed, () => s_sandboxFeatures.SetSourceSinks(!s_sandboxFeatures.AreSourcesAndSinksAllowed)));
-			col2.Add(SandboxToggle("Unlimited unity reserve", s_sandboxFeatures.UnlimitedUnity, () => s_sandboxFeatures.SetUnlimitedUnity(!s_sandboxFeatures.UnlimitedUnity)));
-			col2.Add(SandboxToggle("Disable food consumption", s_sandboxFeatures.UnlimitedFood, () => s_sandboxFeatures.SetUnlimitedFood(!s_sandboxFeatures.UnlimitedFood)));
-			col2.Add(SandboxToggle("No bio waste", s_sandboxFeatures.NoBioWaste, () => s_sandboxFeatures.SetNoBioWaste(!s_sandboxFeatures.NoBioWaste)));
-			col2.Add(SandboxToggle("No landfill waste", s_sandboxFeatures.NoLandfillWaste, () => s_sandboxFeatures.SetNoLandfillWaste(!s_sandboxFeatures.NoLandfillWaste)));
-			col2.Add(SandboxToggle("No toxic slurry waste", s_sandboxFeatures.NoToxicWaste, () => s_sandboxFeatures.SetNoToxicWaste(!s_sandboxFeatures.NoToxicWaste)));
-			col2.Add(SandboxToggle("No depleted uranium waste", s_sandboxFeatures.NoRadioactiveWaste, () => s_sandboxFeatures.SetNoRadioactiveWaste(!s_sandboxFeatures.NoRadioactiveWaste)));
-
-			grid.Add(col1.FlexGrow(1));
-			grid.Add(col2.FlexGrow(1));
-
-			panel.BodyAdd(new UiComponent[] { grid });
 			return panel;
 		}
 
