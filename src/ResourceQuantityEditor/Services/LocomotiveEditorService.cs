@@ -39,7 +39,7 @@ namespace ResourceQuantityEditor {
 		}
 
 		public float GetMaxSpeedKmh(LocomotiveProto proto) {
-			FieldInfo field = FindField(typeof(LocomotiveProto), "MaxSpeed");
+			FieldInfo field = FindField(typeof(TrainCarBaseProto), "MaxSpeed");
 			if (field == null) return 0f;
 			RelTile1f speed = (RelTile1f)field.GetValue(proto);
 			Fix32 kmh = speed.SpeedTilesPerTickToKmPerHour();
@@ -47,10 +47,28 @@ namespace ResourceQuantityEditor {
 		}
 
 		public bool SetMaxSpeedKmh(LocomotiveProto proto, float kmh) {
-			FieldInfo field = FindField(typeof(LocomotiveProto), "MaxSpeed");
+			FieldInfo field = FindField(typeof(TrainCarBaseProto), "MaxSpeed");
 			if (field == null) return false;
 			RelTile1f newSpeed = RelTile1fExtensions.Kmh((double)kmh);
 			field.SetValue(proto, newSpeed);
+
+			// Also update all tenders and cargo wagons to have at least this speed
+			// so they don't bottleneck the train!
+			try {
+				foreach (var car in m_protosDb.All<TrainCarBaseProto>()) {
+					if (car.GetType() != typeof(LocomotiveProto)) {
+						RelTile1f currentCarSpeed = (RelTile1f)field.GetValue(car);
+						Fix32 carKmh = currentCarSpeed.SpeedTilesPerTickToKmPerHour();
+						float carKmhFloat = carKmh.RawValue / 1024f;
+						if (carKmhFloat < kmh) {
+							field.SetValue(car, newSpeed);
+						}
+					}
+				}
+			} catch (Exception ex) {
+				Mafi.Log.Error("Failed to update wagon speeds: " + ex);
+			}
+
 			RelTile1f readBack = (RelTile1f)field.GetValue(proto);
 			Fix32 readKmh = readBack.SpeedTilesPerTickToKmPerHour();
 			float actual = readKmh.RawValue / 1024f;
