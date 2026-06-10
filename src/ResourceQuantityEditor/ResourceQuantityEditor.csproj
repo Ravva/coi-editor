@@ -13,7 +13,7 @@
     <FileAlignment>512</FileAlignment>
     <Deterministic>true</Deterministic>
     <NoStdLib>true</NoStdLib>
-    <COI_ROOT Condition=" '$(COI_ROOT)' == '' ">C:\Games\Captain of Industry\game</COI_ROOT>
+    <COI_ROOT Condition=" '$(COI_ROOT)' == '' ">C:\Games\Captain.Of.Industry\game\game</COI_ROOT>
     <COI_MODS Condition=" '$(COI_MODS)' == '' ">$(APPDATA)\Captain of Industry\Mods</COI_MODS>
     <DeployToModsFolder>true</DeployToModsFolder>
   </PropertyGroup>
