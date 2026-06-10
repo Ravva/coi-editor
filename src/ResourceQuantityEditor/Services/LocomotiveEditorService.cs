@@ -13,6 +13,38 @@ namespace ResourceQuantityEditor {
 		public LocomotiveEditorService(ProtosDb protosDb) {
 			m_protosDb = protosDb;
 			UpdateGlobalMaxSpeedLimit();
+			OverwriteSafetyMargins();
+		}
+
+		private static void OverwriteSafetyMargins() {
+			try {
+				SetStaticField("BRAKING_SAFETY_MARGIN", (Fix32)0.15f);
+				SetStaticField("FOLLOWING_SAFETY_MARGIN", (Fix32)0.15f);
+				SetStaticField("RESERVE_EXTRA_FACTOR_MULT", (Fix32)1.0f);
+				Mafi.Log.Info("LocomotiveEditorService: Successfully set train safety margins to tight values.");
+			} catch (Exception ex) {
+				Mafi.Log.Error("LocomotiveEditorService: Failed to overwrite safety margins: " + ex);
+			}
+		}
+
+		private static void SetStaticField(string name, object value) {
+			try {
+				FieldInfo field = typeof(Train).GetField(name, BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic);
+				if (field != null) {
+					try {
+						FieldInfo attributesField = typeof(FieldInfo).GetField("m_fieldAttributes", BindingFlags.Instance | BindingFlags.NonPublic);
+						if (attributesField != null) {
+							FieldAttributes attrs = field.Attributes;
+							attrs &= ~FieldAttributes.InitOnly;
+							attributesField.SetValue(field, attrs);
+						}
+					} catch {
+					}
+					field.SetValue(null, value);
+				}
+			} catch (Exception ex) {
+				Mafi.Log.Error("Failed to set static field " + name + ": " + ex);
+			}
 		}
 
 		public void UpdateGlobalMaxSpeedLimit() {
@@ -33,25 +65,9 @@ namespace ResourceQuantityEditor {
 		}
 
 		private static void OverwriteMaxSpeedLimit(float kmh) {
-			try {
-				FieldInfo field = typeof(Train).GetField("MAX_SPEED", BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic);
-				if (field != null) {
-					RelTile1f newSpeed = RelTile1fExtensions.Kmh((double)kmh);
-					try {
-						FieldInfo attributesField = typeof(FieldInfo).GetField("m_fieldAttributes", BindingFlags.Instance | BindingFlags.NonPublic);
-						if (attributesField != null) {
-							FieldAttributes attrs = field.Attributes;
-							attrs &= ~FieldAttributes.InitOnly;
-							attributesField.SetValue(field, attrs);
-						}
-					} catch {
-					}
-					field.SetValue(null, newSpeed);
-					Mafi.Log.Info("LocomotiveEditorService: Successfully set Train.MAX_SPEED to " + kmh + " km/h");
-				}
-			} catch (Exception ex) {
-				Mafi.Log.Error("LocomotiveEditorService: Failed to set Train.MAX_SPEED: " + ex);
-			}
+			RelTile1f newSpeed = RelTile1fExtensions.Kmh((double)kmh);
+			SetStaticField("MAX_SPEED", newSpeed);
+			Mafi.Log.Info("LocomotiveEditorService: Successfully set Train.MAX_SPEED to " + kmh + " km/h");
 		}
 
 		public LocomotiveProto[] GetAllLocomotives() {
