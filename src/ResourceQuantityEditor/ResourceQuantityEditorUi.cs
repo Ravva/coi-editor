@@ -851,7 +851,7 @@ namespace ResourceQuantityEditor {
 			scroller.ScrollerAlwaysVisible();
 			scroller.Height(480);
 			scroller.Add(list);
-			panel.BodyAdd(new UiComponent[] { toolbar, scroller });
+			panel.BodyAdd(new UiComponent[] { toolbar, scroller, new Label(L("Note: changes apply only to newly built locomotives. Speed change auto-scales power/tractive effort.")).TinyFontSize() });
 			return panel;
 		}
 
@@ -934,6 +934,17 @@ namespace ResourceQuantityEditor {
 				float targetPower = ParseFloat(state.EnginePower);
 				float targetTractive = ParseFloat(state.TractiveEffort);
 				float targetBraking = ParseFloat(state.BrakingForce);
+
+				bool speedChanged = state.OrigSpeed > 0f && Math.Abs(targetSpeed - state.OrigSpeed) > 0.5f;
+				if (speedChanged) {
+					float factor = targetSpeed / state.OrigSpeed;
+					if (Math.Abs(targetPower - state.OrigEnginePower) < 0.5f) {
+						targetPower = state.OrigEnginePower * factor;
+					}
+					if (Math.Abs(targetTractive - state.OrigTractiveEffort) < 0.5f) {
+						targetTractive = state.OrigTractiveEffort * factor;
+					}
+				}
 
 				s_locoEditor.SetMaxSpeedKmh(loco, targetSpeed);
 				s_locoEditor.SetFieldFloat(loco, "EnginePowerKw", targetPower);
