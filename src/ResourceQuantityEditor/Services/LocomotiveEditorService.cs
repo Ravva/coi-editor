@@ -1,6 +1,7 @@
 using System;
 using System.Linq;
 using System.Reflection;
+using System.Reflection.Emit;
 using HarmonyLib;
 using Mafi;
 using Mafi.Core.Prototypes;
@@ -10,6 +11,8 @@ namespace ResourceQuantityEditor {
 
 	public sealed class LocomotiveEditorService {
 		private readonly ProtosDb m_protosDb;
+		private readonly System.Collections.Generic.Dictionary<string, Action<object, object>> m_setters
+			= new System.Collections.Generic.Dictionary<string, Action<object, object>>();
 
 		public LocomotiveEditorService(ProtosDb protosDb) {
 			m_protosDb = protosDb;
@@ -28,8 +31,10 @@ namespace ResourceQuantityEditor {
 		}
 
 		public void SetFieldFloat(object proto, string fieldName, float value) {
-			Traverse.Create(proto).Field(fieldName).SetValue(
-				ConvertFromFloat(value, FindFieldType(proto.GetType(), fieldName)));
+			var targetType = FindFieldType(proto.GetType(), fieldName);
+			if (targetType == null) return;
+			object converted = ConvertFromFloat(value, targetType);
+			SetFieldValue(proto, fieldName, converted);
 		}
 
 		public float GetMaxSpeedKmh(LocomotiveProto proto) {
@@ -40,7 +45,39 @@ namespace ResourceQuantityEditor {
 
 		public void SetMaxSpeedKmh(LocomotiveProto proto, float kmh) {
 			RelTile1f newSpeed = RelTile1fExtensions.Kmh((double)kmh);
-			Traverse.Create(proto).Field("MaxSpeed").SetValue(newSpeed);
+			SetFieldValue(proto, "MaxSpeed", newSpeed);
+		}
+
+		private void SetFieldValue(object proto, string fieldName, object value) {
+			if (!m_setters.TryGetValue(fieldName, out var setter)) {
+				setter = CreateFieldSetter(proto.GetType(), fieldName);
+				m_setters[fieldName] = setter;
+			}
+			if (setter != null) {
+				setter(proto, value);
+			}
+		}
+
+		private static Action<object, object> CreateFieldSetter(Type declaringType, string fieldName) {
+			FieldInfo field = declaringType.GetField(fieldName, BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
+			if (field == null && declaringType.BaseType != null) {
+				field = declaringType.BaseType.GetField(fieldName, BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
+			}
+			if (field == null) return null;
+
+			var dm = new DynamicMethod("Set_" + fieldName, typeof(void), new[] { typeof(object), typeof(object) }, declaringType.Module, true);
+			var il = dm.GetILGenerator();
+			il.Emit(OpCodes.Ldarg_0);
+			il.Emit(OpCodes.Castclass, declaringType);
+			il.Emit(OpCodes.Ldarg_1);
+			if (field.FieldType.IsValueType) {
+				il.Emit(OpCodes.Unbox_Any, field.FieldType);
+			} else {
+				il.Emit(OpCodes.Castclass, field.FieldType);
+			}
+			il.Emit(OpCodes.Stfld, field);
+			il.Emit(OpCodes.Ret);
+			return (Action<object, object>)dm.CreateDelegate(typeof(Action<object, object>));
 		}
 
 		private static Type FindFieldType(Type type, string fieldName) {
@@ -48,7 +85,7 @@ namespace ResourceQuantityEditor {
 			if (field == null && type.BaseType != null) {
 				field = type.BaseType.GetField(fieldName, BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
 			}
-			return field?.FieldType;
+			return field?.FieldType ?? typeof(float);
 		}
 
 		public static float ConvertToFloat(object val) {
