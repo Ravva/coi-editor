@@ -87,13 +87,13 @@ namespace ResourceQuantityEditor {
 			} catch {
 			}
 
-			// Find any numeric field on this struct via GetAllFields
+			// Recursively find the first instance field whose value can be converted
 			try {
 				FieldInfo[] allFields = type.GetFields(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance);
 				for (int i = 0; i < allFields.Length; i++) {
 					try {
 						object inner = allFields[i].GetValue(val);
-						return System.Convert.ToSingle(inner);
+						return ConvertToFloat(inner);
 					} catch {
 					}
 				}
@@ -105,17 +105,7 @@ namespace ResourceQuantityEditor {
 				PropertyInfo prop = type.GetProperty("Value", BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance);
 				if (prop != null) {
 					object inner = prop.GetValue(val);
-					return System.Convert.ToSingle(inner);
-				}
-			} catch {
-			}
-
-			// Try ToFloat method
-			try {
-				MethodInfo method = type.GetMethod("ToFloat", BindingFlags.Public | BindingFlags.Instance);
-				if (method != null) {
-					object inner = method.Invoke(val, null);
-					return System.Convert.ToSingle(inner);
+					return ConvertToFloat(inner);
 				}
 			} catch {
 			}
@@ -130,8 +120,12 @@ namespace ResourceQuantityEditor {
 			if (targetType == typeof(float)) {
 				return value;
 			}
-			if (targetType.Name == "RelTile1f") {
-				return Activator.CreateInstance(targetType, new object[] { value });
+			string name = targetType.Name;
+			if (name == "RelTile1f") {
+				return Activator.CreateInstance(targetType, new object[] { (Fix32)value });
+			}
+			if (name == "MechPower") {
+				return Activator.CreateInstance(targetType, new object[] { (int)value });
 			}
 			try {
 				return System.Convert.ChangeType(value, targetType);

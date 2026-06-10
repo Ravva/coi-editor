@@ -68,35 +68,27 @@ namespace ResourceQuantityEditor {
 
 		private class LocomotiveEditState {
 			public string Speed = "";
-			public string MassEmpty = "";
-			public string MassFull = "";
 			public string EnginePower = "";
 			public string TractiveEffort = "";
 			public string BrakingForce = "";
 
 			public float OrigSpeed;
-			public float OrigMassEmpty;
-			public float OrigMassFull;
 			public float OrigEnginePower;
 			public float OrigTractiveEffort;
 			public float OrigBrakingForce;
 
 			public bool HasChanges =>
 				Speed != FmtSpeed(OrigSpeed) ||
-				MassEmpty != FmtMass(OrigMassEmpty) ||
-				MassFull != FmtMass(OrigMassFull) ||
 				EnginePower != FmtPower(OrigEnginePower) ||
 				TractiveEffort != FmtForce(OrigTractiveEffort) ||
 				BrakingForce != FmtForce(OrigBrakingForce);
 		}
 
 		private static readonly (string Field, string Header, Func<float, string> Format)[] LocoFieldMeta = {
-			("MaxSpeed",               "Speed\nkm/h",  v => FmtSpeed(v)),
-			("MassTonsWhenEmpty",      "Empty\nmass t", v => FmtMass(v)),
-			("MassTonsWhenFull",       "Full\nmass t",  v => FmtMass(v)),
-			("EnginePowerKw",          "Power\nkW",     v => FmtPower(v)),
-			("MaximumTractiveEffortKn","Tractive\nkN",  v => FmtForce(v)),
-			("BrakingForceKn",         "Braking\nkN",   v => FmtForce(v)),
+			("MaxSpeed",              "Speed\nkm/h", v => FmtSpeed(v)),
+			("EnginePowerKw",         "Power\nkW",  v => FmtPower(v)),
+			("StartingTractiveEffort","Tractive\nkN", v => FmtForce(v)),
+			("BrakingForceKn",        "Braking\nkN", v => FmtForce(v)),
 		};
 
 		public static void Install(
@@ -885,23 +877,19 @@ namespace ResourceQuantityEditor {
 		private void LoadLocoValues(LocomotiveProto loco, int index) {
 			LocomotiveEditState s = m_locoStates[index];
 			s.OrigSpeed = s_locoEditor.GetMaxSpeedKmh(loco);
-			s.OrigMassEmpty = s_locoEditor.GetFieldFloat(loco, "MassTonsWhenEmpty");
-			s.OrigMassFull = s_locoEditor.GetFieldFloat(loco, "MassTonsWhenFull");
 			s.OrigEnginePower = s_locoEditor.GetFieldFloat(loco, "EnginePowerKw");
-			s.OrigTractiveEffort = s_locoEditor.GetFieldFloat(loco, "MaximumTractiveEffortKn");
+			s.OrigTractiveEffort = s_locoEditor.GetFieldFloat(loco, "StartingTractiveEffort");
 			s.OrigBrakingForce = s_locoEditor.GetFieldFloat(loco, "BrakingForceKn");
 
 			s.Speed = FmtSpeed(s.OrigSpeed);
-			s.MassEmpty = FmtMass(s.OrigMassEmpty);
-			s.MassFull = FmtMass(s.OrigMassFull);
 			s.EnginePower = FmtPower(s.OrigEnginePower);
 			s.TractiveEffort = FmtForce(s.OrigTractiveEffort);
 			s.BrakingForce = FmtForce(s.OrigBrakingForce);
 		}
 
 		private void BuildLocoHeader(Column list) {
-			Row header = new Row(6);
-			header.Add(new Label(L("Locomotive")).TinyFontSize().Width(180));
+			Row header = new Row(4);
+			header.Add(new Label(L("Locomotive")).TinyFontSize().Width(220));
 			foreach ((string field, string head, _) in LocoFieldMeta) {
 				header.Add(new Label(L(head)).TinyFontSize().Width(72));
 			}
@@ -917,12 +905,10 @@ namespace ResourceQuantityEditor {
 
 			bool changed = state.HasChanges;
 
-			Row row = new Row(6);
-			row.Add(new Label(L(loco.Strings.Name.TranslatedString)).Width(180));
+			Row row = new Row(4);
+			row.Add(new Label(L(loco.Strings.Name.TranslatedString)).Width(220));
 
 			AddLocoField(row, state.Speed,          val => state.Speed = val);
-			AddLocoField(row, state.MassEmpty,      val => state.MassEmpty = val);
-			AddLocoField(row, state.MassFull,       val => state.MassFull = val);
 			AddLocoField(row, state.EnginePower,    val => state.EnginePower = val);
 			AddLocoField(row, state.TractiveEffort, val => state.TractiveEffort = val);
 			AddLocoField(row, state.BrakingForce,   val => state.BrakingForce = val);
@@ -945,10 +931,8 @@ namespace ResourceQuantityEditor {
 			LocomotiveEditState state = m_locoStates[index];
 			RunSafely(() => {
 				s_locoEditor.SetMaxSpeedKmh(loco, ParseFloat(state.Speed));
-				s_locoEditor.SetFieldFloat(loco, "MassTonsWhenEmpty", ParseFloat(state.MassEmpty));
-				s_locoEditor.SetFieldFloat(loco, "MassTonsWhenFull", ParseFloat(state.MassFull));
 				s_locoEditor.SetFieldFloat(loco, "EnginePowerKw", ParseFloat(state.EnginePower));
-				s_locoEditor.SetFieldFloat(loco, "MaximumTractiveEffortKn", ParseFloat(state.TractiveEffort));
+				s_locoEditor.SetFieldFloat(loco, "StartingTractiveEffort", ParseFloat(state.TractiveEffort));
 				s_locoEditor.SetFieldFloat(loco, "BrakingForceKn", ParseFloat(state.BrakingForce));
 				LoadLocoValues(loco, index);
 				SetStatus("Applied: " + loco.Strings.Name);
@@ -968,8 +952,6 @@ namespace ResourceQuantityEditor {
 		private void ResetLocomotive(LocomotiveProto loco, int index) {
 			LocomotiveEditState state = m_locoStates[index];
 			state.Speed = FmtSpeed(state.OrigSpeed);
-			state.MassEmpty = FmtMass(state.OrigMassEmpty);
-			state.MassFull = FmtMass(state.OrigMassFull);
 			state.EnginePower = FmtPower(state.OrigEnginePower);
 			state.TractiveEffort = FmtForce(state.OrigTractiveEffort);
 			state.BrakingForce = FmtForce(state.OrigBrakingForce);
@@ -985,7 +967,6 @@ namespace ResourceQuantityEditor {
 		}
 
 		private static string FmtSpeed(float v)  => v.ToString("F0");
-		private static string FmtMass(float v)   => v.ToString("F1");
 		private static string FmtPower(float v)  => v.ToString("F0");
 		private static string FmtForce(float v)  => v.ToString("F0");
 
