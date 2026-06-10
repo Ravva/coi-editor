@@ -1,6 +1,7 @@
 using System;
 using System.Linq;
 using System.Reflection;
+using HarmonyLib;
 using Mafi;
 using Mafi.Core.Prototypes;
 using Mafi.Core.Trains;
@@ -10,69 +11,44 @@ namespace ResourceQuantityEditor {
 	public sealed class LocomotiveEditorService {
 		private readonly ProtosDb m_protosDb;
 
-		private const float REL_TILE_1F_TO_KMH = 1200f;
-
 		public LocomotiveEditorService(ProtosDb protosDb) {
 			m_protosDb = protosDb;
 		}
 
 		public LocomotiveProto[] GetAllLocomotives() {
 			return m_protosDb.All<LocomotiveProto>()
+				.Where(p => p.GetType() == typeof(LocomotiveProto))
 				.OrderBy(x => x.Id.ToString())
 				.ToArray();
 		}
 
 		public float GetFieldFloat(object proto, string fieldName) {
-			object val = GetRawFieldValue(proto, fieldName);
+			object val = Traverse.Create(proto).Field(fieldName).GetValue();
 			return ConvertToFloat(val);
 		}
 
 		public void SetFieldFloat(object proto, string fieldName, float value) {
-			FieldInfo field = FindField(proto.GetType(), fieldName);
-			if (field == null) {
-				return;
-			}
-			field.SetValue(proto, ConvertFromFloat(value, field.FieldType));
+			Traverse.Create(proto).Field(fieldName).SetValue(
+				ConvertFromFloat(value, FindFieldType(proto.GetType(), fieldName)));
 		}
 
 		public float GetMaxSpeedKmh(LocomotiveProto proto) {
-			FieldInfo field = FindField(typeof(LocomotiveProto), "MaxSpeed");
-			if (field == null) {
-				return 0f;
-			}
-			RelTile1f speed = (RelTile1f)field.GetValue(proto);
+			RelTile1f speed = Traverse.Create(proto).Field("MaxSpeed").GetValue<RelTile1f>();
 			Fix32 kmh = speed.SpeedTilesPerTickToKmPerHour();
 			return kmh.RawValue / 1024f;
 		}
 
 		public void SetMaxSpeedKmh(LocomotiveProto proto, float kmh) {
-			FieldInfo field = FindField(typeof(LocomotiveProto), "MaxSpeed");
-			if (field == null) {
-				field = FindField(typeof(TrainCarBaseProto), "MaxSpeed");
-			}
-			if (field == null) {
-				return;
-			}
 			RelTile1f newSpeed = RelTile1fExtensions.Kmh((double)kmh);
-			field.SetValue(proto, newSpeed);
+			Traverse.Create(proto).Field("MaxSpeed").SetValue(newSpeed);
 		}
 
-		public static object GetRawFieldValue(object proto, string fieldName) {
-			FieldInfo field = FindField(proto.GetType(), fieldName);
-			if (field == null) {
-				// Try backing field name for auto-properties
-				string backing = "<" + fieldName + ">k__BackingField";
-				field = FindField(proto.GetType(), backing);
-			}
-			return field?.GetValue(proto);
-		}
-
-		public static FieldInfo FindField(Type type, string fieldName) {
+		private static Type FindFieldType(Type type, string fieldName) {
 			FieldInfo field = type.GetField(fieldName, BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
 			if (field == null && type.BaseType != null) {
 				field = type.BaseType.GetField(fieldName, BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
 			}
-			return field;
+			return field?.FieldType;
 		}
 
 		public static float ConvertToFloat(object val) {
@@ -81,19 +57,16 @@ namespace ResourceQuantityEditor {
 			}
 			Type type = val.GetType();
 
-			// Fix32: use RawValue / 1024 (FRACTIONAL_BITS = 10)
 			if (type == typeof(Fix32)) {
 				int raw = ((Fix32)val).RawValue;
 				return raw / 1024f;
 			}
 
-			// Try IConvertible (float, int, double, etc.)
 			try {
 				return System.Convert.ToSingle(val);
 			} catch {
 			}
 
-			// Recursively find the first instance field whose value can be converted
 			try {
 				FieldInfo[] allFields = type.GetFields(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance);
 				for (int i = 0; i < allFields.Length; i++) {
@@ -106,7 +79,6 @@ namespace ResourceQuantityEditor {
 			} catch {
 			}
 
-			// Try Value property
 			try {
 				PropertyInfo prop = type.GetProperty("Value", BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance);
 				if (prop != null) {
