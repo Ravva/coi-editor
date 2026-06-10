@@ -45,7 +45,9 @@
     <Compile Include="Patches\SettlementCheatsPatch.cs" />
     <Compile Include="Patches\HealthCheatsPatch.cs" />
     <Compile Include="Services\VisualTweaksService.cs" />
-  </ItemGroup>
+		<Compile Include="Services\OptionsStateService.cs" />
+		<Compile Include="Services\LocomotiveEditorService.cs" />
+	  </ItemGroup>
 
   <ItemGroup>
     <None Include="manifest.json" />

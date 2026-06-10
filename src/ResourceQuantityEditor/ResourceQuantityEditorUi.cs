@@ -2,6 +2,8 @@ using System;
 using System.Linq;
 using Mafi.Collections.ImmutableCollections;
 using Mafi.Core.Products;
+using Mafi.Core.Terrain;
+using Mafi.Core.Trains;
 using Mafi.Localization;
 using Mafi.Unity.Ui;
 using Mafi.Unity.UiToolkit.Component;
@@ -16,12 +18,15 @@ namespace ResourceQuantityEditor {
 		private static SandboxFeatureService s_sandboxFeatures;
 		private static TreeRangeRemovalService s_treeRangeRemoval;
 		private static UiContext s_uiContext;
+		private static OptionsStateService s_optionsState;
+		private static LocomotiveEditorService s_locoEditor;
 		private const string ICON_EMPTY = "Assets/Unity/UserInterface/General/Empty128.png";
 		private const string ICON_POPULATION = "Assets/Unity/UserInterface/General/Population.svg";
 		private const string ICON_STORAGE = "Assets/Unity/UserInterface/General/Storage.svg";
 		private const string ICON_WEATHER = "Assets/Unity/UserInterface/General/Weather.svg";
 		private const string ICON_WRENCH = "Assets/Unity/UserInterface/General/Wrench.svg";
 		private const string ICON_TRUCK = "Assets/Unity/UserInterface/General/Truck.svg";
+
 
 		private Window m_window;
 		private TextField m_statusField;
@@ -30,10 +35,6 @@ namespace ResourceQuantityEditor {
 		private string m_productFilter = "";
 		private string m_weatherFilter = "";
 		private bool m_weatherFilterWasEntered;
-		private string m_asteroidMaterialFilter = "";
-		private bool m_asteroidMaterialFilterWasEntered;
-		private bool m_showAsteroidMaterial1Dropdown;
-		private bool m_showAsteroidMaterial2Dropdown;
 		private bool m_showProductsList;
 		private bool m_showWeatherList;
 		private bool m_showAsteroidsList;
@@ -48,6 +49,8 @@ namespace ResourceQuantityEditor {
 		private string m_selectedProductId = "";
 		private string m_selectedProductName = "";
 		private Dropdown<ProductProto> m_productDropdown;
+		private Dropdown<TerrainMaterialProto> m_asteroidMaterial1Dropdown;
+		private Dropdown<TerrainMaterialProto> m_asteroidMaterial2Dropdown;
 		private string m_resourceAmount = "100";
 		private string m_populationAmount = "100";
 		private string m_weatherSunIntensity = "100";
@@ -59,16 +62,56 @@ namespace ResourceQuantityEditor {
 		private string m_cargoShipsAmount = "2";
 		private string m_vehicleLimitAmount = "100";
 		private string m_status = "";
+		private string m_locoFilter = "";
+		private bool m_locoFilterWasEntered;
+		private LocomotiveEditState[] m_locoStates = Array.Empty<LocomotiveEditState>();
+
+		private class LocomotiveEditState {
+			public string Speed = "";
+			public string MassEmpty = "";
+			public string MassFull = "";
+			public string EnginePower = "";
+			public string TractiveEffort = "";
+			public string BrakingForce = "";
+
+			public float OrigSpeed;
+			public float OrigMassEmpty;
+			public float OrigMassFull;
+			public float OrigEnginePower;
+			public float OrigTractiveEffort;
+			public float OrigBrakingForce;
+
+			public bool HasChanges =>
+				Speed != FmtSpeed(OrigSpeed) ||
+				MassEmpty != FmtMass(OrigMassEmpty) ||
+				MassFull != FmtMass(OrigMassFull) ||
+				EnginePower != FmtPower(OrigEnginePower) ||
+				TractiveEffort != FmtForce(OrigTractiveEffort) ||
+				BrakingForce != FmtForce(OrigBrakingForce);
+		}
+
+		private static readonly (string Field, string Header, Func<float, string> Format)[] LocoFieldMeta = {
+			("MaxSpeed",               "Speed\nkm/h",  v => FmtSpeed(v)),
+			("MassTonsWhenEmpty",      "Empty\nmass t", v => FmtMass(v)),
+			("MassTonsWhenFull",       "Full\nmass t",  v => FmtMass(v)),
+			("EnginePowerKw",          "Power\nkW",     v => FmtPower(v)),
+			("MaximumTractiveEffortKn","Tractive\nkN",  v => FmtForce(v)),
+			("BrakingForceKn",         "Braking\nkN",   v => FmtForce(v)),
+		};
 
 		public static void Install(
 			GlobalResourceEditorService globalEditor,
 			SandboxFeatureService sandboxFeatures,
 			TreeRangeRemovalService treeRangeRemoval,
-			UiContext uiContext) {
+			UiContext uiContext,
+			OptionsStateService optionsState,
+			LocomotiveEditorService locoEditor) {
 			s_globalEditor = globalEditor;
 			s_sandboxFeatures = sandboxFeatures;
 			s_treeRangeRemoval = treeRangeRemoval;
 			s_uiContext = uiContext;
+			s_optionsState = optionsState;
+			s_locoEditor = locoEditor;
 			if (s_instance != null) {
 				return;
 			}
@@ -116,8 +159,12 @@ namespace ResourceQuantityEditor {
 
 		private void OpenWindow() {
 			CloseWindow();
-			m_window = BuildWindow();
-			m_window.Open(s_uiContext.UiRoot);
+			try {
+				m_window = BuildWindow();
+				m_window.Open(s_uiContext.UiRoot);
+			} catch (Exception ex) {
+				SetStatus("OpenWindow error: " + ex.Message);
+			}
 		}
 
 		private void CloseWindow() {
@@ -140,7 +187,8 @@ namespace ResourceQuantityEditor {
 			tabs.Add(L("Sandbox"), null, BuildSandboxTab(), Scroll.No);
 			tabs.Add(L("Settlement"), null, BuildSettlementTab(), Scroll.No);
 			tabs.Add(L("Logistics"), null, BuildLogisticsTab(), Scroll.No);
-			if (m_tab > 4) {
+			tabs.Add(L("Locomotives"), null, BuildLocomotivesTab(), Scroll.No);
+			if (m_tab > 5) {
 				m_tab = 0;
 			}
 			tabs.SwitchToTab(m_tab);
@@ -234,7 +282,7 @@ namespace ResourceQuantityEditor {
 			selectedRow.Add(new Label(L("Amount")).UpperCase(false).Width(72));
 			selectedRow.Add(new TextField()
 				.Text(m_resourceAmount)
-				.NumericOnly()
+
 				.CharLimit(12)
 				.OnValueChanged(x => m_resourceAmount = x, isDelayed: false)
 				.Width(160));
@@ -288,6 +336,18 @@ namespace ResourceQuantityEditor {
 			return row;
 		}
 
+		private UiComponent AsteroidMaterialOptionFactory(TerrainMaterialProto material, int index, bool isInDropdown) {
+			Row row = new Row(8);
+			if (material != null) {
+				row.Add(new Icon(material.MinedProduct, noTooltip: true, noRightClick: true).Size(24));
+				row.Add(new Label(L(material.MinedProduct.Strings.Name.TranslatedString)).FlexGrow(1));
+			} else {
+				row.Add(new Icon(ICON_EMPTY).Size(24));
+				row.Add(new Label(L("None")).FlexGrow(1));
+			}
+			return row;
+		}
+
 		private UiComponent BuildGlobalProductsList() {
 			PanelWithHeader products = new PanelWithHeader(L("GLOBAL INVENTORY"));
 
@@ -316,7 +376,15 @@ namespace ResourceQuantityEditor {
 			primary.Add(ActionButton("Refresh status", () => RunSandboxCommand(() => s_sandboxFeatures.GetStatus()), Button.General).Width(150));
 			FinishCenteredRow(primary);
 
-			panel.BodyAdd(new UiComponent[] { primary });
+			Row optionsState = CenteredRow();
+			optionsState.Add(new Label(L("Options state")).UpperCase(false).Width(110));
+			optionsState.Add(ActionButton("Save current", () => RunSandboxCommand(() => s_optionsState.SaveCurrentState()), Button.Primary).Width(150));
+			optionsState.Add(ActionButton("Load saved", () => RunSandboxCommand(() => s_optionsState.LoadSavedState()), Button.General).Width(140));
+			optionsState.Add(ActionButton("Clear saved", () => RunSandboxCommand(() => s_optionsState.ClearSavedState()), Button.Warning).Width(140));
+			optionsState.Add(new Label(L(s_optionsState.HasSavedState() ? "Saved state exists" : "No saved state")).Width(180));
+			FinishCenteredRow(optionsState);
+
+			panel.BodyAdd(new UiComponent[] { primary, optionsState });
 			return panel;
 		}
 
@@ -437,14 +505,14 @@ namespace ResourceQuantityEditor {
 			intensityRow.Add(new Label(L("Sun")).UpperCase(false).Width(40));
 			intensityRow.Add(new TextField()
 				.Text(m_weatherSunIntensity)
-				.NumericOnly()
+
 				.CharLimit(5)
 				.OnValueChanged(x => m_weatherSunIntensity = x, isDelayed: false)
 				.Width(80));
 			intensityRow.Add(new Label(L("Rain")).UpperCase(false).Width(40));
 			intensityRow.Add(new TextField()
 				.Text(m_weatherRainIntensity)
-				.NumericOnly()
+
 				.CharLimit(5)
 				.OnValueChanged(x => m_weatherRainIntensity = x, isDelayed: false)
 				.Width(80));
@@ -509,23 +577,70 @@ namespace ResourceQuantityEditor {
 			PanelWithHeader panel = new PanelWithHeader(L("ASTEROID CONTROL"));
 			panel.BodyGap(8);
 
+			// Получаем все материалы для астероидов
+			var allMaterials = s_sandboxFeatures.GetAllAsteroidMaterials();
+
 			Row materials = CenteredRow();
-			materials.Add(BuildAsteroidMaterialDropdown(1, "Material 1", m_selectedAsteroidMaterial1Id, m_selectedAsteroidMaterial1Name, m_showAsteroidMaterial1Dropdown).Width(390));
-			materials.Add(BuildAsteroidMaterialDropdown(2, "Material 2", m_selectedAsteroidMaterial2Id, m_selectedAsteroidMaterial2Name, m_showAsteroidMaterial2Dropdown).Width(390));
+			
+			// Material 1 Dropdown
+			materials.Add(new Label(L("Material 1")).UpperCase(false).Width(85));
+			m_asteroidMaterial1Dropdown = new Dropdown<TerrainMaterialProto>(AsteroidMaterialOptionFactory)
+				.OnValueChanged((m, idx) => {
+					if (m != null) {
+						m_selectedAsteroidMaterial1Id = m.Id.ToString();
+						m_selectedAsteroidMaterial1Name = m.MinedProduct.Strings.Name.ToString();
+					}
+					RefreshWindow();
+				})
+				.SetSearchStringLookup(m => m != null ? m.MinedProduct.Strings.Name.TranslatedString : "")
+				.Width(350);
+			m_asteroidMaterial1Dropdown.SetOptions(allMaterials);
+			TerrainMaterialProto selectedMat1 = GetSelectedAsteroidMaterial(m_selectedAsteroidMaterial1Id, allMaterials);
+			if (selectedMat1 != null) {
+				m_asteroidMaterial1Dropdown.SetValue(selectedMat1);
+			}
+			materials.Add(m_asteroidMaterial1Dropdown);
+			
+			// Material 2 Dropdown (с возможностью очистки)
+			materials.Add(new Label(L("Material 2")).UpperCase(false).Width(85));
+			m_asteroidMaterial2Dropdown = new Dropdown<TerrainMaterialProto>(AsteroidMaterialOptionFactory)
+				.OnValueChanged((m, idx) => {
+					if (m != null) {
+						m_selectedAsteroidMaterial2Id = m.Id.ToString();
+						m_selectedAsteroidMaterial2Name = m.MinedProduct.Strings.Name.ToString();
+					} else {
+						m_selectedAsteroidMaterial2Id = "";
+						m_selectedAsteroidMaterial2Name = "";
+					}
+					RefreshWindow();
+				})
+				.SetSearchStringLookup(m => m != null ? m.MinedProduct.Strings.Name.TranslatedString : "None")
+				.Width(350);
+			// Добавляем null как первый элемент для возможности очистки
+			var materialsWithNone = new TerrainMaterialProto[] { null }.Concat(allMaterials);
+			m_asteroidMaterial2Dropdown.SetOptions(materialsWithNone);
+			TerrainMaterialProto selectedMat2 = GetSelectedAsteroidMaterial(m_selectedAsteroidMaterial2Id, allMaterials);
+			if (selectedMat2 != null) {
+				m_asteroidMaterial2Dropdown.SetValue(selectedMat2);
+			} else if (string.IsNullOrEmpty(m_selectedAsteroidMaterial2Id)) {
+				m_asteroidMaterial2Dropdown.SetValue(null);
+			}
+			materials.Add(m_asteroidMaterial2Dropdown);
+			
 			FinishCenteredRow(materials);
 
 			Row create = CenteredRow();
 			create.Add(new Label(L("Radius")).UpperCase(false).Width(70));
 			create.Add(new TextField()
 				.Text(m_asteroidRadius)
-				.NumericOnly()
+
 				.CharLimit(4)
 				.OnValueChanged(x => m_asteroidRadius = x, isDelayed: false)
 				.Width(80));
 			create.Add(new Label(L("M1:M2 ratio")).UpperCase(false).Width(100));
 			create.Add(new TextField()
 				.Text(m_asteroidMaterialRatio)
-				.NumericOnly()
+
 				.CharLimit(4)
 				.OnValueChanged(x => m_asteroidMaterialRatio = x, isDelayed: false)
 				.Width(80));
@@ -540,119 +655,27 @@ namespace ResourceQuantityEditor {
 			landing.Add(new Label(L("Landing X")).UpperCase(false).Width(80));
 			landing.Add(new TextField()
 				.Text(m_asteroidLandingX)
-				.NumericOnly()
+
 				.CharLimit(6)
 				.OnValueChanged(x => m_asteroidLandingX = x, isDelayed: false)
 				.Width(90));
 			landing.Add(new Label(L("Y")).UpperCase(false).Width(30));
 			landing.Add(new TextField()
 				.Text(m_asteroidLandingY)
-				.NumericOnly()
+
 				.CharLimit(6)
 				.OnValueChanged(x => m_asteroidLandingY = x, isDelayed: false)
 				.Width(90));
 			landing.Add(ActionButton("Land selected asteroid", RunDropAsteroid, Button.Warning).Width(210));
 			FinishCenteredRow(landing);
 
-			Row filter = CenteredRow();
-			filter.Add(new Label(L("Search materials")).UpperCase(false).Width(130));
-			TextField materialFilterField = new TextField()
-				.Text(m_asteroidMaterialFilter)
-				.OnValueChanged(delegate(string x) {
-					if (!string.IsNullOrEmpty(x)) {
-						m_asteroidMaterialFilterWasEntered = true;
-					}
-					m_asteroidMaterialFilter = x;
-					RefreshWindow();
-				}, isDelayed: false)
-				.Width(260);
-			if (!m_asteroidMaterialFilterWasEntered) {
-				materialFilterField.Placeholder(L("id or name"));
-			}
-			filter.Add(materialFilterField);
-			FinishCenteredRow(filter);
-
 			Column body = new Column(8);
 			body.Add(materials);
-			if (m_showAsteroidMaterial1Dropdown || m_showAsteroidMaterial2Dropdown) {
-				body.Add(BuildAsteroidMaterialDropdownList(m_showAsteroidMaterial1Dropdown ? 1 : 2));
-			}
 			body.Add(create);
 			body.Add(landing);
-			body.Add(filter);
 
 			panel.BodyAdd(new UiComponent[] { body });
 			return panel;
-		}
-
-		private UiComponent BuildAsteroidMaterialDropdown(int slot, string label, string selectedId, string selectedName, bool isOpen) {
-			Column column = new Column(4);
-			Row title = new Row(6);
-			title.Add(new Label(L(label)).UpperCase(false).Width(85));
-			if (slot == 2) {
-				title.Add(ActionButton("Clear", delegate {
-					m_selectedAsteroidMaterial2Id = "";
-					m_selectedAsteroidMaterial2Name = "";
-					m_showAsteroidMaterial2Dropdown = false;
-					RefreshWindow();
-				}, Button.General).Width(80));
-			}
-			column.Add(title);
-
-			Row selector = new Row(8);
-			ProductProto selectedProduct = GetAsteroidMaterialProduct(selectedId);
-			selector.Add(selectedProduct != null
-				? (UiComponent)new Icon(selectedProduct, noTooltip: true, noRightClick: true).Size(24)
-				: new Icon(ICON_EMPTY).Size(24));
-			selector.Add(new ButtonText(Button.Area, L(string.IsNullOrEmpty(selectedName) ? "None" : selectedName), delegate {
-				m_showAsteroidMaterial1Dropdown = slot == 1 && !isOpen;
-				m_showAsteroidMaterial2Dropdown = slot == 2 && !isOpen;
-				RefreshWindow();
-			}).Width(330));
-			column.Add(selector);
-			return column;
-		}
-
-		private UiComponent BuildAsteroidMaterialDropdownList(int slot) {
-			PanelWithHeader panel = new PanelWithHeader(L(slot == 1 ? "SELECT MATERIAL 1" : "SELECT MATERIAL 2"));
-
-			Column list = new Column(6);
-			if (slot == 2) {
-				Row none = CenteredRow();
-				none.Add(new Icon(ICON_EMPTY).Size(24));
-				none.Add(new ButtonText(Button.Area, L("None"), delegate {
-					m_selectedAsteroidMaterial2Id = "";
-					m_selectedAsteroidMaterial2Name = "";
-					m_showAsteroidMaterial2Dropdown = false;
-					RefreshWindow();
-				}).Width(420));
-				FinishCenteredRow(none);
-				list.Add(none);
-			}
-
-			foreach (AsteroidMaterialRow material in s_sandboxFeatures.GetAsteroidMaterialRows(m_asteroidMaterialFilter)) {
-				list.Add(BuildAsteroidMaterialOptionRow(material, slot));
-			}
-
-			ScrollColumn scroll = new ScrollColumn();
-			scroll.ScrollerAlwaysVisible();
-			scroll.Height(230);
-			scroll.Add(list);
-			panel.BodyAdd(new UiComponent[] { scroll });
-			return panel;
-		}
-
-		private UiComponent BuildAsteroidMaterialOptionRow(AsteroidMaterialRow material, int slot) {
-			Row row = CenteredRow();
-			row.Add(new Icon(material.Product, noTooltip: true, noRightClick: true).Size(24));
-			row.Add(new ButtonText(Button.Area, L(material.Name), delegate {
-				SelectAsteroidMaterial(material, slot);
-				RefreshWindow();
-			}).Width(300));
-			row.Add(new Label(L(material.Id)).TinyFontSize().Width(220));
-			row.Add(new Label(L(material.IsFiller ? "Filler" : "Ore")).Width(70));
-			FinishCenteredRow(row);
-			return row;
 		}
 
 		private UiComponent BuildAsteroidsListDeck() {
@@ -729,7 +752,7 @@ namespace ResourceQuantityEditor {
 			actions.Add(new Label(L("Cargo ships")).UpperCase(false).Width(110));
 			actions.Add(new TextField()
 				.Text(m_cargoShipsAmount)
-				.NumericOnly()
+
 				.CharLimit(5)
 				.OnValueChanged(x => m_cargoShipsAmount = x, isDelayed: false)
 				.Width(80));
@@ -757,7 +780,7 @@ namespace ResourceQuantityEditor {
 			vehicles.Add(new Label(L("Vehicle limit")).UpperCase(false).Width(110));
 			vehicles.Add(new TextField()
 				.Text(m_vehicleLimitAmount)
-				.NumericOnly()
+
 				.CharLimit(6)
 				.OnValueChanged(x => m_vehicleLimitAmount = x, isDelayed: false)
 				.Width(90));
@@ -768,6 +791,217 @@ namespace ResourceQuantityEditor {
 			return panel;
 		}
 
+		/* ─── Locomotives Tab ─── */
+
+		private UiComponent BuildLocomotivesTab() {
+			Column root = new Column(12);
+			try {
+				ScrollColumn scroll = new ScrollColumn().FlexGrow(1);
+				scroll.Add(BuildLocomotivesDeck());
+				root.Add(scroll);
+			} catch (Exception ex) {
+				root.Add(new Label(L("Error loading locomotives: " + ex.Message)));
+				Mafi.Log.Error("LocomotivesTab: " + ex);
+			}
+			return root.FlexGrow(1);
+		}
+
+		private UiComponent BuildLocomotivesDeck() {
+			PanelWithHeader panel = new PanelWithHeader(L("LOCOMOTIVES"));
+			LocomotiveProto[] locos;
+			try {
+				locos = s_locoEditor.GetAllLocomotives();
+			} catch (Exception ex) {
+				panel.BodyAdd(new UiComponent[] { new Label(L("Failed to load locomotive data: " + ex.Message)) });
+				Mafi.Log.Error("LocomotivesDeck: " + ex);
+				return panel;
+			}
+			InitLocoStates(locos);
+
+			// Toolbar: icon + actions
+			Row toolbar = CenteredRow();
+			toolbar.Add(new Icon(ICON_WRENCH).Size(24));
+			toolbar.Add(new Label(L("Locomotive editor")).IncFontSize().Width(200));
+			toolbar.Add(ActionButton("Apply all", () => ApplyAllLocomotives(locos), Button.Primary).Width(130));
+			toolbar.Add(ActionButton("Reset all", () => ResetAllLocomotives(locos), Button.Warning).Width(130));
+
+			TextField filterField = new TextField()
+				.Text(m_locoFilter)
+				.OnValueChanged(delegate(string x) {
+					m_locoFilterWasEntered = true;
+					m_locoFilter = x;
+				}, isDelayed: false)
+				.Width(200);
+			if (!m_locoFilterWasEntered) {
+				filterField.Placeholder(L("filter by name or id"));
+			}
+			toolbar.Add(filterField);
+			FinishCenteredRow(toolbar);
+
+			// Table header
+			Column list = new Column(4);
+			BuildLocoHeader(list);
+
+			// Rows
+			for (int i = 0; i < locos.Length; i++) {
+				if (!MatchesLocoFilter(locos[i])) {
+					continue;
+				}
+				try {
+					BuildLocoRow(list, locos[i], i);
+				} catch (Exception ex) {
+					list.Add(new Label(L("Error: " + locos[i].Id + " — " + ex.Message)));
+					Mafi.Log.Error("Locomotives row " + i + ": " + ex);
+				}
+			}
+
+			ScrollColumn scroller = new ScrollColumn();
+			scroller.ScrollerAlwaysVisible();
+			scroller.Height(480);
+			scroller.Add(list);
+			panel.BodyAdd(new UiComponent[] { toolbar, scroller });
+			return panel;
+		}
+
+		private bool MatchesLocoFilter(LocomotiveProto loco) {
+			if (string.IsNullOrEmpty(m_locoFilter)) {
+				return true;
+			}
+			string filter = m_locoFilter.Trim();
+			return loco.Id.ToString().IndexOf(filter, StringComparison.OrdinalIgnoreCase) >= 0
+				|| loco.Strings.Name.TranslatedString.IndexOf(filter, StringComparison.OrdinalIgnoreCase) >= 0;
+		}
+
+		private void InitLocoStates(LocomotiveProto[] locos) {
+			if (m_locoStates.Length == locos.Length) {
+				return;
+			}
+			m_locoStates = new LocomotiveEditState[locos.Length];
+			for (int i = 0; i < m_locoStates.Length; i++) {
+				m_locoStates[i] = new LocomotiveEditState();
+			}
+		}
+
+		private void LoadLocoValues(LocomotiveProto loco, int index) {
+			LocomotiveEditState s = m_locoStates[index];
+			s.OrigSpeed = s_locoEditor.GetMaxSpeedKmh(loco);
+			s.OrigMassEmpty = s_locoEditor.GetFieldFloat(loco, "MassTonsWhenEmpty");
+			s.OrigMassFull = s_locoEditor.GetFieldFloat(loco, "MassTonsWhenFull");
+			s.OrigEnginePower = s_locoEditor.GetFieldFloat(loco, "EnginePowerKw");
+			s.OrigTractiveEffort = s_locoEditor.GetFieldFloat(loco, "MaximumTractiveEffortKn");
+			s.OrigBrakingForce = s_locoEditor.GetFieldFloat(loco, "BrakingForceKn");
+
+			s.Speed = FmtSpeed(s.OrigSpeed);
+			s.MassEmpty = FmtMass(s.OrigMassEmpty);
+			s.MassFull = FmtMass(s.OrigMassFull);
+			s.EnginePower = FmtPower(s.OrigEnginePower);
+			s.TractiveEffort = FmtForce(s.OrigTractiveEffort);
+			s.BrakingForce = FmtForce(s.OrigBrakingForce);
+		}
+
+		private void BuildLocoHeader(Column list) {
+			Row header = new Row(6);
+			header.Add(new Label(L("Locomotive")).TinyFontSize().Width(180));
+			foreach ((string field, string head, _) in LocoFieldMeta) {
+				header.Add(new Label(L(head)).TinyFontSize().Width(72));
+			}
+			header.Add(new Label(L("")).Width(140));
+			list.Add(header);
+		}
+
+		private void BuildLocoRow(Column list, LocomotiveProto loco, int index) {
+			LocomotiveEditState state = m_locoStates[index];
+			if (string.IsNullOrEmpty(state.Speed)) {
+				LoadLocoValues(loco, index);
+			}
+
+			bool changed = state.HasChanges;
+
+			Row row = new Row(6);
+			row.Add(new Label(L(loco.Strings.Name.TranslatedString)).Width(180));
+
+			AddLocoField(row, state.Speed,          val => state.Speed = val);
+			AddLocoField(row, state.MassEmpty,      val => state.MassEmpty = val);
+			AddLocoField(row, state.MassFull,       val => state.MassFull = val);
+			AddLocoField(row, state.EnginePower,    val => state.EnginePower = val);
+			AddLocoField(row, state.TractiveEffort, val => state.TractiveEffort = val);
+			AddLocoField(row, state.BrakingForce,   val => state.BrakingForce = val);
+
+			ButtonVariant applyVariant = changed ? Button.Warning : Button.General;
+			row.Add(ActionButton("Apply", () => ApplyLocomotive(loco, index), applyVariant).Width(68));
+			row.Add(ActionButton("Reset", () => ResetLocomotive(loco, index), Button.Area).Width(68));
+			list.Add(row);
+		}
+
+		private static void AddLocoField(Row row, string currentVal, Action<string> setter) {
+			row.Add(new TextField()
+				.Text(currentVal)
+				.CharLimit(8)
+				.OnValueChanged(setter, isDelayed: false)
+				.Width(70));
+		}
+
+		private void ApplyLocomotive(LocomotiveProto loco, int index) {
+			LocomotiveEditState state = m_locoStates[index];
+			RunSafely(() => {
+				s_locoEditor.SetMaxSpeedKmh(loco, ParseFloat(state.Speed));
+				s_locoEditor.SetFieldFloat(loco, "MassTonsWhenEmpty", ParseFloat(state.MassEmpty));
+				s_locoEditor.SetFieldFloat(loco, "MassTonsWhenFull", ParseFloat(state.MassFull));
+				s_locoEditor.SetFieldFloat(loco, "EnginePowerKw", ParseFloat(state.EnginePower));
+				s_locoEditor.SetFieldFloat(loco, "MaximumTractiveEffortKn", ParseFloat(state.TractiveEffort));
+				s_locoEditor.SetFieldFloat(loco, "BrakingForceKn", ParseFloat(state.BrakingForce));
+				LoadLocoValues(loco, index);
+				SetStatus("Applied: " + loco.Strings.Name);
+			});
+			RefreshWindow();
+		}
+
+		private void ApplyAllLocomotives(LocomotiveProto[] locos) {
+			for (int i = 0; i < locos.Length; i++) {
+				if (m_locoStates[i].HasChanges) {
+					ApplyLocomotive(locos[i], i);
+				}
+			}
+			SetStatus("Applied all changed locomotives.");
+		}
+
+		private void ResetLocomotive(LocomotiveProto loco, int index) {
+			LocomotiveEditState state = m_locoStates[index];
+			state.Speed = FmtSpeed(state.OrigSpeed);
+			state.MassEmpty = FmtMass(state.OrigMassEmpty);
+			state.MassFull = FmtMass(state.OrigMassFull);
+			state.EnginePower = FmtPower(state.OrigEnginePower);
+			state.TractiveEffort = FmtForce(state.OrigTractiveEffort);
+			state.BrakingForce = FmtForce(state.OrigBrakingForce);
+			SetStatus("Reset: " + loco.Strings.Name);
+			RefreshWindow();
+		}
+
+		private void ResetAllLocomotives(LocomotiveProto[] locos) {
+			for (int i = 0; i < locos.Length; i++) {
+				ResetLocomotive(locos[i], i);
+			}
+			SetStatus("Reset all locomotives.");
+		}
+
+		private static string FmtSpeed(float v)  => v.ToString("F0");
+		private static string FmtMass(float v)   => v.ToString("F1");
+		private static string FmtPower(float v)  => v.ToString("F0");
+		private static string FmtForce(float v)  => v.ToString("F0");
+
+		private static float ParseFloat(string value) {
+			if (string.IsNullOrEmpty(value)) {
+				return 0f;
+			}
+			float result;
+			if (float.TryParse(value, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out result)) {
+				return result;
+			}
+			return 0f;
+		}
+
+		/* ─── end Locomotives Tab ─── */
+
 		private UiComponent BuildSandboxPopulationDeck() {
 			PanelWithHeader panel = new PanelWithHeader(L("POPULATION"));
 
@@ -775,7 +1009,7 @@ namespace ResourceQuantityEditor {
 			people.Add(new Label(L("Amount")).UpperCase(false).Width(72));
 			people.Add(new TextField()
 				.Text(m_populationAmount)
-				.NumericOnly()
+
 				.CharLimit(12)
 				.OnValueChanged(x => m_populationAmount = x, isDelayed: false)
 				.Width(120));
@@ -876,33 +1110,21 @@ namespace ResourceQuantityEditor {
 			return null;
 		}
 
-		private void SelectProduct(ProductProto product) {
-			m_selectedProductId = GetProductId(product);
-			m_selectedProductName = GetProductName(product);
-		}
-
-		private ProductProto GetAsteroidMaterialProduct(string materialId) {
+		private TerrainMaterialProto GetSelectedAsteroidMaterial(string materialId, TerrainMaterialProto[] materials) {
 			if (string.IsNullOrEmpty(materialId)) {
 				return null;
 			}
-			foreach (AsteroidMaterialRow material in s_sandboxFeatures.GetAsteroidMaterialRows("")) {
-				if (material.Id == materialId) {
-					return material.Product;
+			foreach (TerrainMaterialProto material in materials) {
+				if (material.Id.ToString() == materialId) {
+					return material;
 				}
 			}
 			return null;
 		}
 
-		private void SelectAsteroidMaterial(AsteroidMaterialRow material, int slot) {
-			if (slot == 1) {
-				m_selectedAsteroidMaterial1Id = material.Id;
-				m_selectedAsteroidMaterial1Name = material.Name;
-				m_showAsteroidMaterial1Dropdown = false;
-				return;
-			}
-			m_selectedAsteroidMaterial2Id = material.Id;
-			m_selectedAsteroidMaterial2Name = material.Name;
-			m_showAsteroidMaterial2Dropdown = false;
+		private void SelectProduct(ProductProto product) {
+			m_selectedProductId = GetProductId(product);
+			m_selectedProductName = GetProductName(product);
 		}
 
 		private static string GetProductId(ProductProto product) {

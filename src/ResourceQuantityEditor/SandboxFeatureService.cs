@@ -692,6 +692,14 @@ namespace ResourceQuantityEditor {
 				.ToArray();
 		}
 
+		public TerrainMaterialProto[] GetAllAsteroidMaterials() {
+			return m_protosDb.All<TerrainMaterialProto>()
+				.Where(x => IsAsteroidMaterial(x))
+				.OrderByDescending(x => x.AsteroidSpawnWeight)
+				.ThenBy(x => x.Id.ToString())
+				.ToArray();
+		}
+
 		public AsteroidRow[] GetAsteroidRows() {
 			return m_asteroidsManager.AsteroidsActive.AsEnumerable()
 				.OrderBy(x => x.Id.Value)
@@ -914,7 +922,17 @@ namespace ResourceQuantityEditor {
 		}
 
 		private static bool IsAsteroidMaterial(TerrainMaterialProto material) {
-			return material.AsteroidSpawnWeight > 0 || material.IsAsteroidFillerMaterial;
+			// Включаем материалы с весом спавна > 0, филлеры, и кварцевый песок
+			if (material.AsteroidSpawnWeight > 0 || material.IsAsteroidFillerMaterial) {
+				return true;
+			}
+			// Добавляем кварцевый песок (Quartz) вручную
+			string materialId = material.Id.ToString();
+			if (materialId.IndexOf("Quartz", StringComparison.OrdinalIgnoreCase) >= 0 ||
+			    materialId.IndexOf("Sand", StringComparison.OrdinalIgnoreCase) >= 0) {
+				return true;
+			}
+			return false;
 		}
 
 		private static bool MatchesAsteroidMaterialFilter(TerrainMaterialProto material, string filter) {

@@ -61,6 +61,8 @@ namespace ResourceQuantityEditor {
 			depBuilder.RegisterDependency<SandboxFeatureService>().AsSelf();
 			depBuilder.RegisterDependency<TreeRangeRemovalService>().AsSelf();
 			depBuilder.RegisterDependency<VisualTweaksService>().AsSelf();
+			depBuilder.RegisterDependency<OptionsStateService>().AsSelf();
+			depBuilder.RegisterDependency<LocomotiveEditorService>().AsSelf();
 		}
 
 		public void EarlyInit(DependencyResolver resolver) {
@@ -79,11 +81,29 @@ namespace ResourceQuantityEditor {
 		}
 
 		public void Initialize(DependencyResolver resolver, bool gameWasLoaded) {
+			SandboxFeatureService sandboxFeatures = resolver.Resolve<SandboxFeatureService>();
+			OptionsStateService optionsState = resolver.Resolve<OptionsStateService>();
+			
 			ResourceQuantityEditorUi.Install(
 				resolver.Resolve<GlobalResourceEditorService>(),
-				resolver.Resolve<SandboxFeatureService>(),
+				sandboxFeatures,
 				resolver.Resolve<TreeRangeRemovalService>(),
-				resolver.Resolve<UiContext>());
+				resolver.Resolve<UiContext>(),
+				optionsState,
+				resolver.Resolve<LocomotiveEditorService>());
+			
+			// Автоматически загружаем сохраненные опции при инициализации мода
+			// Загружаем всегда, когда есть сохраненный файл (и при новой игре, и при загрузке)
+			if (optionsState.HasSavedState()) {
+				try {
+					string result = optionsState.LoadSavedState();
+					Log.Info("ResourceQuantityEditor: Auto-loading options - " + result);
+				} catch (Exception ex) {
+					Log.Warning("ResourceQuantityEditor: Failed to auto-load options: " + ex.Message);
+				}
+			} else {
+				Log.Info("ResourceQuantityEditor: No saved options state found, using defaults.");
+			}
 		}
 
 		public void MigrateJsonConfig(VersionSlim savedVersion, Dict<string, object> savedValues) {
