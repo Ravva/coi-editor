@@ -18,9 +18,9 @@ namespace ResourceQuantityEditor {
 
 		private static void OverwriteSafetyMargins() {
 			try {
-				SetStaticField("BRAKING_SAFETY_MARGIN", (Fix32)0.15f);
-				SetStaticField("FOLLOWING_SAFETY_MARGIN", (Fix32)0.15f);
-				SetStaticField("RESERVE_EXTRA_FACTOR_MULT", (Fix32)1.0f);
+				SetStaticField("BRAKING_SAFETY_MARGIN", (Fix32)1.10f);
+				SetStaticField("FOLLOWING_SAFETY_MARGIN", (Fix32)0.20f);
+				SetStaticField("RESERVE_EXTRA_FACTOR_MULT", (Fix32)1.10f);
 				Mafi.Log.Info("LocomotiveEditorService: Successfully set train safety margins to tight values.");
 			} catch (Exception ex) {
 				Mafi.Log.Error("LocomotiveEditorService: Failed to overwrite safety margins: " + ex);
