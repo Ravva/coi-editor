@@ -12,7 +12,24 @@ namespace ResourceQuantityEditor {
 
 		public LocomotiveEditorService(ProtosDb protosDb) {
 			m_protosDb = protosDb;
-			OverwriteMaxSpeedLimit(1000f);
+			UpdateGlobalMaxSpeedLimit();
+		}
+
+		public void UpdateGlobalMaxSpeedLimit() {
+			try {
+				float maxSpeed = 144f;
+				foreach (var loco in m_protosDb.All<LocomotiveProto>()) {
+					if (loco.GetType() == typeof(LocomotiveProto)) {
+						float speed = GetMaxSpeedKmh(loco);
+						if (speed > maxSpeed) {
+							maxSpeed = speed;
+						}
+					}
+				}
+				OverwriteMaxSpeedLimit(maxSpeed);
+			} catch (Exception ex) {
+				Mafi.Log.Error("Failed to update global max speed: " + ex);
+			}
 		}
 
 		private static void OverwriteMaxSpeedLimit(float kmh) {
@@ -103,6 +120,10 @@ namespace ResourceQuantityEditor {
 			RelTile1f readBack = (RelTile1f)field.GetValue(proto);
 			Fix32 readKmh = readBack.SpeedTilesPerTickToKmPerHour();
 			float actual = readKmh.RawValue / 1024f;
+			
+			// Dynamically update global Train.MAX_SPEED based on all locomotive configurations
+			UpdateGlobalMaxSpeedLimit();
+			
 			return Math.Abs(actual - kmh) < 1f;
 		}
 
