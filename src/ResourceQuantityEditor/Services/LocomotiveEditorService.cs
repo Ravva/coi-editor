@@ -36,8 +36,13 @@ namespace ResourceQuantityEditor {
 		}
 
 		public float GetMaxSpeedKmh(LocomotiveProto proto) {
-			object val = GetRawFieldValue(proto, "MaxSpeed");
-			return ConvertToFloat(val) * REL_TILE_1F_TO_KMH;
+			FieldInfo field = FindField(typeof(LocomotiveProto), "MaxSpeed");
+			if (field == null) {
+				return 0f;
+			}
+			RelTile1f speed = (RelTile1f)field.GetValue(proto);
+			Fix32 kmh = speed.SpeedTilesPerTickToKmPerHour();
+			return kmh.RawValue / 1024f;
 		}
 
 		public void SetMaxSpeedKmh(LocomotiveProto proto, float kmh) {
@@ -48,7 +53,8 @@ namespace ResourceQuantityEditor {
 			if (field == null) {
 				return;
 			}
-			field.SetValue(proto, ConvertFromFloat(kmh / REL_TILE_1F_TO_KMH, field.FieldType));
+			RelTile1f newSpeed = RelTile1fExtensions.Kmh((double)kmh);
+			field.SetValue(proto, newSpeed);
 		}
 
 		public static object GetRawFieldValue(object proto, string fieldName) {
