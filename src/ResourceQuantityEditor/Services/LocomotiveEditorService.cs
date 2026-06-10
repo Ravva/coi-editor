@@ -55,7 +55,15 @@ namespace ResourceQuantityEditor {
 			// Also update all tenders and cargo wagons to have at least this speed
 			// so they don't bottleneck the train!
 			try {
-				foreach (var car in m_protosDb.All<TrainCarBaseProto>()) {
+				var cars = new System.Collections.Generic.List<TrainCarBaseProto>();
+				try { cars.AddRange(m_protosDb.All<LocomotiveProto>()); } catch {}
+				try { cars.AddRange(m_protosDb.All<TenderWagonProto>()); } catch {}
+				try { cars.AddRange(m_protosDb.All<CargoWagonProto>()); } catch {}
+				try { cars.AddRange(m_protosDb.All<CargoWagonLooseProto>()); } catch {}
+				try { cars.AddRange(m_protosDb.All<CargoWagonMoltenProto>()); } catch {}
+				try { cars.AddRange(m_protosDb.All<CargoWagonUnitProto>()); } catch {}
+
+				foreach (var car in cars) {
 					if (car.GetType() != typeof(LocomotiveProto)) {
 						RelTile1f currentCarSpeed = (RelTile1f)field.GetValue(car);
 						Fix32 carKmh = currentCarSpeed.SpeedTilesPerTickToKmPerHour();
