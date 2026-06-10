@@ -946,24 +946,26 @@ namespace ResourceQuantityEditor {
 					}
 				}
 
-				s_locoEditor.SetMaxSpeedKmh(loco, targetSpeed);
-				s_locoEditor.SetFieldFloat(loco, "EnginePowerKw", targetPower);
-				s_locoEditor.SetFieldFloat(loco, "StartingTractiveEffort", targetTractive);
-				s_locoEditor.SetFieldFloat(loco, "BrakingForceKn", targetBraking);
+				bool speedOk = s_locoEditor.SetMaxSpeedKmh(loco, targetSpeed);
+				bool powerOk = s_locoEditor.SetFieldFloat(loco, "EnginePowerKw", targetPower);
+				bool tractiveOk = s_locoEditor.SetFieldFloat(loco, "StartingTractiveEffort", targetTractive);
+				bool brakingOk = s_locoEditor.SetFieldFloat(loco, "BrakingForceKn", targetBraking);
 
 				LoadLocoValues(loco, index);
 
-				float actualSpeed = state.OrigSpeed;
-				float actualPower = state.OrigEnginePower;
-				float actualTractive = state.OrigTractiveEffort;
-				float actualBraking = state.OrigBrakingForce;
+				string verify = string.Format("S:{0} P:{1} T:{2} B:{3}",
+					speedOk ? "OK" : "FAIL",
+					powerOk ? "OK" : "FAIL",
+					tractiveOk ? "OK" : "FAIL",
+					brakingOk ? "OK" : "FAIL");
 
-				SetStatus(string.Format("Applied {0}: Speed {1:F0}->{2:F0} Power {3:F0}->{4:F0} Tractive {5:F0}->{6:F0} Braking {7:F0}->{8:F0}",
+				SetStatus(string.Format("Applied {0}: Speed {1:F0}->{2:F0} Power {3:F0}->{4:F0} Tractive {5:F0}->{6:F0} Braking {7:F0}->{8:F0} [{9}]",
 					loco.Strings.Name,
-					targetSpeed, actualSpeed,
-					targetPower, actualPower,
-					targetTractive, actualTractive,
-					targetBraking, actualBraking));
+					targetSpeed, state.OrigSpeed,
+					targetPower, state.OrigEnginePower,
+					targetTractive, state.OrigTractiveEffort,
+					targetBraking, state.OrigBrakingForce,
+					verify));
 			});
 			RefreshWindow();
 		}
