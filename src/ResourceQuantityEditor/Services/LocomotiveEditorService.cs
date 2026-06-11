@@ -21,9 +21,9 @@ namespace ResourceQuantityEditor {
 
 		private static void OverwriteSafetyMargins() {
 			try {
-				SetStaticField(typeof(Train), "BRAKING_SAFETY_MARGIN", (Fix32)1.30f);
+				SetStaticField(typeof(Train), "BRAKING_SAFETY_MARGIN", (Fix32)1.00f);
 				SetStaticField(typeof(Train), "FOLLOWING_SAFETY_MARGIN", (Fix32)0.20f);
-				SetStaticField(typeof(Train), "RESERVE_EXTRA_FACTOR_MULT", (Fix32)1.50f);
+				SetStaticField(typeof(Train), "RESERVE_EXTRA_FACTOR_MULT", (Fix32)1.30f);
 				Mafi.Log.Info("LocomotiveEditorService: Successfully set train safety margins to tight values.");
 			} catch (Exception ex) {
 				Mafi.Log.Error("LocomotiveEditorService: Failed to overwrite safety margins: " + ex);
@@ -140,7 +140,7 @@ namespace ResourceQuantityEditor {
 							train.Data.MaxSpeedBasedOnConstruction,
 							train.Data.MaxBrakingForceKn,
 							train.Data.MassTonsWhenFull);
-						RelTile1f resDist = stoppingDistance * (Fix32)1.50f;
+						RelTile1f resDist = stoppingDistance * (Fix32)1.30f;
 						resDistField.SetValue(train, resDist);
 					}
 				}
