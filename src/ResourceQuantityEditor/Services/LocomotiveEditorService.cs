@@ -111,30 +111,79 @@ namespace ResourceQuantityEditor {
 			try {
 				if (m_trainsManager == null || m_trainsManager.Trains == null) return;
 
-				FieldInfo dataField = typeof(Train).GetField("<Data>k__BackingField", BindingFlags.Instance | BindingFlags.NonPublic);
 				FieldInfo maxSpeedField = typeof(Train).GetField("<MaxSpeed>k__BackingField", BindingFlags.Instance | BindingFlags.NonPublic);
 				FieldInfo resDistField = typeof(Train).GetField("<AttemptedReservationDistance>k__BackingField", BindingFlags.Instance | BindingFlags.NonPublic);
+
+				// TrainStaticData fields
+				FieldInfo tsdMaxSpeedConstField = typeof(TrainStaticData).GetField("MaxSpeedBasedOnConstruction", BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.Public);
+				FieldInfo tsdTotalPowerField = typeof(TrainStaticData).GetField("TotalMaxPower", BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.Public);
+				FieldInfo tsdTotalPowerFwdField = typeof(TrainStaticData).GetField("TotalMaxPowerForwards", BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.Public);
+				FieldInfo tsdTotalPowerBwdField = typeof(TrainStaticData).GetField("TotalMaxPowerBackwards", BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.Public);
+				FieldInfo tsdStartingTractiveField = typeof(TrainStaticData).GetField("StartingTractiveEffortKn", BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.Public);
+				FieldInfo tsdMaxBrakingField = typeof(TrainStaticData).GetField("MaxBrakingForceKn", BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.Public);
+
+				MethodInfo recomputeSpeedsMethod = typeof(TrainStaticData).GetMethod("recomputeSpeeds", BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
 
 				foreach (var train in m_trainsManager.Trains) {
 					if (train == null || train.Data == null) continue;
 
-					// 1. Recreate TrainStaticData from prototypes to pick up modified values
-					TrainStaticData newStaticData = new TrainStaticData(
-						train.Data.TrainCars,
-						m_trainsManager.SlopeDifficultyMultiplier,
-						m_trainsManager.FuelConsumptionMultiplier,
-						m_trainsManager.PollutionMultiplier
-					);
-					if (dataField != null) {
-						dataField.SetValue(train, newStaticData);
+					// 1. Calculate combined specs from prototypes in-place
+					RelTile1f maxSpeed = RelTile1fExtensions.Kmh(1000f);
+					int totalPower = 0;
+					Fix32 totalTractive = Fix32.Zero;
+					Fix32 totalBraking = Fix32.Zero;
+
+					foreach (var car in train.Data.TrainCars) {
+						if (car == null) continue;
+						
+						// Speed
+						FieldInfo speedField = FindField(car.GetType(), "MaxSpeed");
+						if (speedField != null) {
+							RelTile1f carSpeed = (RelTile1f)speedField.GetValue(car);
+							if (ConvertToFloat(carSpeed) < ConvertToFloat(maxSpeed)) {
+								maxSpeed = carSpeed;
+							}
+						}
+
+						// Braking
+						FieldInfo brakingField = FindField(car.GetType(), "BrakingForceKn");
+						if (brakingField != null) {
+							totalBraking += (Fix32)brakingField.GetValue(car);
+						}
+
+						// Locomotive specs
+						if (car is LocomotiveProto loco) {
+							FieldInfo powerField = FindField(loco.GetType(), "EnginePowerKw");
+							if (powerField != null) {
+								object powerVal = powerField.GetValue(loco);
+								int powerInt = (int)typeof(MechPower).GetField("Value", BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.Public).GetValue(powerVal);
+								totalPower += powerInt;
+							}
+
+							FieldInfo tractiveField = FindField(loco.GetType(), "StartingTractiveEffort");
+							if (tractiveField != null) {
+								totalTractive += (Fix32)tractiveField.GetValue(loco);
+							}
+						}
 					}
 
-					// 2. Update train max speed field
+					// 2. Write new values to TrainStaticData fields
+					tsdMaxSpeedConstField?.SetValue(train.Data, maxSpeed);
+					tsdTotalPowerField?.SetValue(train.Data, new MechPower(totalPower));
+					tsdTotalPowerFwdField?.SetValue(train.Data, new MechPower(totalPower));
+					tsdTotalPowerBwdField?.SetValue(train.Data, new MechPower(totalPower));
+					tsdStartingTractiveField?.SetValue(train.Data, totalTractive);
+					tsdMaxBrakingField?.SetValue(train.Data, totalBraking);
+
+					// 3. Trigger game's recomputeSpeeds to rebuild performance curves
+					recomputeSpeedsMethod?.Invoke(train.Data, null);
+
+					// 4. Update Train instance max speed field
 					if (maxSpeedField != null) {
 						maxSpeedField.SetValue(train, train.Data.MaxSpeedBasedOnConstruction);
 					}
 
-					// 3. Re-calculate attempted reservation distance based on new braking specs
+					// 5. Re-calculate attempted reservation distance based on new braking specs
 					if (resDistField != null) {
 						RelTile1f stoppingDistance = train.Data.ComputeStoppingDistanceEstimate(
 							train.Data.MaxSpeedBasedOnConstruction,
@@ -144,7 +193,7 @@ namespace ResourceQuantityEditor {
 						resDistField.SetValue(train, resDist);
 					}
 				}
-				Mafi.Log.Info("LocomotiveEditorService: Successfully updated " + m_trainsManager.Trains.Count + " active trains.");
+				Mafi.Log.Info("LocomotiveEditorService: Successfully updated " + m_trainsManager.Trains.Count + " active trains in-place.");
 			} catch (Exception ex) {
 				Mafi.Log.Error("LocomotiveEditorService: Failed to update active trains: " + ex);
 			}
