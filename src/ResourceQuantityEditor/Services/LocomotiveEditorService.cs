@@ -111,15 +111,23 @@ namespace ResourceQuantityEditor {
 			try {
 				if (m_trainsManager == null || m_trainsManager.Trains == null) return;
 
+				FieldInfo dataField = typeof(Train).GetField("<Data>k__BackingField", BindingFlags.Instance | BindingFlags.NonPublic);
 				FieldInfo maxSpeedField = typeof(Train).GetField("<MaxSpeed>k__BackingField", BindingFlags.Instance | BindingFlags.NonPublic);
 				FieldInfo resDistField = typeof(Train).GetField("<AttemptedReservationDistance>k__BackingField", BindingFlags.Instance | BindingFlags.NonPublic);
 
 				foreach (var train in m_trainsManager.Trains) {
 					if (train == null || train.Data == null) continue;
 
-					// 1. Recompute performance curves based on new prototype values
-					typeof(TrainStaticData).GetMethod("recomputeSpeeds", BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic)
-						?.Invoke(train.Data, null);
+					// 1. Recreate TrainStaticData from prototypes to pick up modified values
+					TrainStaticData newStaticData = new TrainStaticData(
+						train.Data.TrainCars,
+						m_trainsManager.SlopeDifficultyMultiplier,
+						m_trainsManager.FuelConsumptionMultiplier,
+						m_trainsManager.PollutionMultiplier
+					);
+					if (dataField != null) {
+						dataField.SetValue(train, newStaticData);
+					}
 
 					// 2. Update train max speed field
 					if (maxSpeedField != null) {
