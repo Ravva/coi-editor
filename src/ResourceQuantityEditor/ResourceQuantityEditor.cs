@@ -83,6 +83,7 @@ namespace ResourceQuantityEditor {
 		public void Initialize(DependencyResolver resolver, bool gameWasLoaded) {
 			SandboxFeatureService sandboxFeatures = resolver.Resolve<SandboxFeatureService>();
 			OptionsStateService optionsState = resolver.Resolve<OptionsStateService>();
+			LocomotiveEditorService locoEditor = resolver.Resolve<LocomotiveEditorService>();
 			
 			ResourceQuantityEditorUi.Install(
 				resolver.Resolve<GlobalResourceEditorService>(),
@@ -90,7 +91,7 @@ namespace ResourceQuantityEditor {
 				resolver.Resolve<TreeRangeRemovalService>(),
 				resolver.Resolve<UiContext>(),
 				optionsState,
-				resolver.Resolve<LocomotiveEditorService>());
+				locoEditor);
 			
 			// Автоматически загружаем сохраненные опции при инициализации мода
 			// Загружаем всегда, когда есть сохраненный файл (и при новой игре, и при загрузке)
@@ -103,6 +104,14 @@ namespace ResourceQuantityEditor {
 				}
 			} else {
 				Log.Info("ResourceQuantityEditor: No saved options state found, using defaults.");
+			}
+
+			// Update active trains once on load to propagate modified speed limits to existing trains
+			try {
+				locoEditor.UpdateActiveTrains();
+				Log.Info("ResourceQuantityEditor: Successfully auto-updated active trains on mod initialization");
+			} catch (Exception ex) {
+				Log.Error("ResourceQuantityEditor: Failed to auto-update active trains: " + ex.Message);
 			}
 		}
 

@@ -9,27 +9,40 @@ namespace ResourceQuantityEditor {
 
 	public sealed class LocomotiveEditorService {
 		private readonly ProtosDb m_protosDb;
+		private readonly TrainsManager m_trainsManager;
 
-		public LocomotiveEditorService(ProtosDb protosDb) {
+		public LocomotiveEditorService(ProtosDb protosDb, TrainsManager trainsManager) {
 			m_protosDb = protosDb;
+			m_trainsManager = trainsManager;
 			UpdateGlobalMaxSpeedLimit();
 			OverwriteSafetyMargins();
+			OverwritePushPullPenalties();
 		}
 
 		private static void OverwriteSafetyMargins() {
 			try {
-				SetStaticField("BRAKING_SAFETY_MARGIN", (Fix32)1.10f);
-				SetStaticField("FOLLOWING_SAFETY_MARGIN", (Fix32)0.20f);
-				SetStaticField("RESERVE_EXTRA_FACTOR_MULT", (Fix32)1.10f);
+				SetStaticField(typeof(Train), "BRAKING_SAFETY_MARGIN", (Fix32)1.10f);
+				SetStaticField(typeof(Train), "FOLLOWING_SAFETY_MARGIN", (Fix32)0.20f);
+				SetStaticField(typeof(Train), "RESERVE_EXTRA_FACTOR_MULT", (Fix32)1.10f);
 				Mafi.Log.Info("LocomotiveEditorService: Successfully set train safety margins to tight values.");
 			} catch (Exception ex) {
 				Mafi.Log.Error("LocomotiveEditorService: Failed to overwrite safety margins: " + ex);
 			}
 		}
 
-		private static void SetStaticField(string name, object value) {
+		private static void OverwritePushPullPenalties() {
 			try {
-				FieldInfo field = typeof(Train).GetField(name, BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic);
+				SetStaticField(typeof(TrainStaticData), "PUSH_PULL_WAGONS_MULT", Percent.Hundred);
+				SetStaticField(typeof(TrainStaticData), "PUSHED_WAGON_POWER_PENALTY", Percent.Zero);
+				Mafi.Log.Info("LocomotiveEditorService: Successfully disabled push/pull train penalties.");
+			} catch (Exception ex) {
+				Mafi.Log.Error("LocomotiveEditorService: Failed to overwrite push/pull penalties: " + ex);
+			}
+		}
+
+		private static void SetStaticField(Type type, string name, object value) {
+			try {
+				FieldInfo field = type.GetField(name, BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic);
 				if (field != null) {
 					try {
 						FieldInfo attributesField = typeof(FieldInfo).GetField("m_fieldAttributes", BindingFlags.Instance | BindingFlags.NonPublic);
@@ -43,7 +56,7 @@ namespace ResourceQuantityEditor {
 					field.SetValue(null, value);
 				}
 			} catch (Exception ex) {
-				Mafi.Log.Error("Failed to set static field " + name + ": " + ex);
+				Mafi.Log.Error("Failed to set static field " + name + " on type " + type.Name + ": " + ex);
 			}
 		}
 
@@ -66,7 +79,7 @@ namespace ResourceQuantityEditor {
 
 		private static void OverwriteMaxSpeedLimit(float kmh) {
 			RelTile1f newSpeed = RelTile1fExtensions.Kmh((double)kmh);
-			SetStaticField("MAX_SPEED", newSpeed);
+			SetStaticField(typeof(Train), "MAX_SPEED", newSpeed);
 			Mafi.Log.Info("LocomotiveEditorService: Successfully set Train.MAX_SPEED to " + kmh + " km/h");
 		}
 
@@ -92,6 +105,41 @@ namespace ResourceQuantityEditor {
 			if (readBack == null) return false;
 			float readVal = ConvertToFloat(readBack);
 			return Math.Abs(readVal - value) < 1f;
+		}
+
+		public void UpdateActiveTrains() {
+			try {
+				if (m_trainsManager == null || m_trainsManager.Trains == null) return;
+
+				FieldInfo maxSpeedField = typeof(Train).GetField("<MaxSpeed>k__BackingField", BindingFlags.Instance | BindingFlags.NonPublic);
+				FieldInfo resDistField = typeof(Train).GetField("<AttemptedReservationDistance>k__BackingField", BindingFlags.Instance | BindingFlags.NonPublic);
+
+				foreach (var train in m_trainsManager.Trains) {
+					if (train == null || train.Data == null) continue;
+
+					// 1. Recompute performance curves based on new prototype values
+					typeof(TrainStaticData).GetMethod("recomputeSpeeds", BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic)
+						?.Invoke(train.Data, null);
+
+					// 2. Update train max speed field
+					if (maxSpeedField != null) {
+						maxSpeedField.SetValue(train, train.Data.MaxSpeedBasedOnConstruction);
+					}
+
+					// 3. Re-calculate attempted reservation distance based on new braking specs
+					if (resDistField != null) {
+						RelTile1f stoppingDistance = train.Data.ComputeStoppingDistanceEstimate(
+							train.Data.MaxSpeedBasedOnConstruction,
+							train.Data.MaxBrakingForceKn,
+							train.Data.MassTonsWhenFull);
+						RelTile1f resDist = stoppingDistance * (Fix32)1.10f;
+						resDistField.SetValue(train, resDist);
+					}
+				}
+				Mafi.Log.Info("LocomotiveEditorService: Successfully updated " + m_trainsManager.Trains.Count + " active trains.");
+			} catch (Exception ex) {
+				Mafi.Log.Error("LocomotiveEditorService: Failed to update active trains: " + ex);
+			}
 		}
 
 		public float GetMaxSpeedKmh(LocomotiveProto proto) {

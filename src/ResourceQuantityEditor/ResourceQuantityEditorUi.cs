@@ -951,6 +951,7 @@ namespace ResourceQuantityEditor {
 				bool tractiveOk = s_locoEditor.SetFieldFloat(loco, "StartingTractiveEffort", targetTractive);
 				bool brakingOk = s_locoEditor.SetFieldFloat(loco, "BrakingForceKn", targetBraking);
 
+				s_locoEditor.UpdateActiveTrains();
 				LoadLocoValues(loco, index);
 
 				string verify = string.Format("S:{0} P:{1} T:{2} B:{3}",
