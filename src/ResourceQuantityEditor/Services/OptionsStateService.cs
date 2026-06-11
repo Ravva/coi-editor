@@ -1,5 +1,6 @@
 using System;
 using System.IO;
+using System.Linq;
 using System.Text;
 using Mafi;
 
@@ -7,10 +8,12 @@ namespace ResourceQuantityEditor {
 
 	public sealed class OptionsStateService {
 		private readonly SandboxFeatureService m_sandboxFeatures;
+		private readonly LocomotiveEditorService m_locoEditor;
 		private readonly string m_saveFilePath;
 
-		public OptionsStateService(SandboxFeatureService sandboxFeatures) {
+		public OptionsStateService(SandboxFeatureService sandboxFeatures, LocomotiveEditorService locoEditor) {
 			m_sandboxFeatures = sandboxFeatures;
+			m_locoEditor = locoEditor;
 			string appDataPath = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
 			string modDataPath = Path.Combine(appDataPath, "Captain of Industry", "Mods", "ResourceQuantityEditor");
 			if (!Directory.Exists(modDataPath)) {
@@ -66,6 +69,15 @@ namespace ResourceQuantityEditor {
 				sb.AppendLine("IgnoreFuelConsumption=" + m_sandboxFeatures.IgnoreFuelConsumption);
 				sb.AppendLine("UnlimitedVehicleFuel=" + m_sandboxFeatures.UnlimitedVehicleFuel);
 				sb.AppendLine("InstantCargoShips=" + m_sandboxFeatures.InstantCargoShips);
+
+				// Locomotive settings
+				foreach (var loco in m_locoEditor.GetAllLocomotives()) {
+					string id = loco.Id.ToString();
+					sb.AppendLine("LocoSpeed_" + id + "=" + m_locoEditor.GetMaxSpeedKmh(loco).ToString(System.Globalization.CultureInfo.InvariantCulture));
+					sb.AppendLine("LocoPower_" + id + "=" + m_locoEditor.GetFieldFloat(loco, "EnginePowerKw").ToString(System.Globalization.CultureInfo.InvariantCulture));
+					sb.AppendLine("LocoTractive_" + id + "=" + m_locoEditor.GetFieldFloat(loco, "StartingTractiveEffort").ToString(System.Globalization.CultureInfo.InvariantCulture));
+					sb.AppendLine("LocoBraking_" + id + "=" + m_locoEditor.GetFieldFloat(loco, "BrakingForceKn").ToString(System.Globalization.CultureInfo.InvariantCulture));
+				}
 				
 				File.WriteAllText(m_saveFilePath, sb.ToString());
 				return "Options state saved to " + m_saveFilePath;
@@ -94,13 +106,19 @@ namespace ResourceQuantityEditor {
 					}
 
 					string key = parts[0].Trim();
-					bool value;
-					if (!bool.TryParse(parts[1].Trim(), out value)) {
-						continue;
-					}
+					string valueStr = parts[1].Trim();
 
-					ApplyOption(key, value);
-					appliedCount++;
+					bool boolValue;
+					if (bool.TryParse(valueStr, out boolValue)) {
+						ApplyOption(key, boolValue);
+						appliedCount++;
+					} else {
+						float floatValue;
+						if (float.TryParse(valueStr, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out floatValue)) {
+							ApplyFloatOption(key, floatValue);
+							appliedCount++;
+						}
+					}
 				}
 
 				return "Loaded " + appliedCount + " options from saved state.";
@@ -242,6 +260,38 @@ namespace ResourceQuantityEditor {
 				}
 			} catch (Exception ex) {
 				Log.Warning("Failed to apply option " + key + ": " + ex.Message);
+			}
+		}
+
+		private void ApplyFloatOption(string key, float value) {
+			try {
+				if (key.StartsWith("LocoSpeed_")) {
+					string id = key.Substring("LocoSpeed_".Length);
+					var loco = m_locoEditor.GetAllLocomotives().FirstOrDefault(l => l.Id.ToString() == id);
+					if (loco != null) {
+						m_locoEditor.SetMaxSpeedKmh(loco, value);
+					}
+				} else if (key.StartsWith("LocoPower_")) {
+					string id = key.Substring("LocoPower_".Length);
+					var loco = m_locoEditor.GetAllLocomotives().FirstOrDefault(l => l.Id.ToString() == id);
+					if (loco != null) {
+						m_locoEditor.SetFieldFloat(loco, "EnginePowerKw", value);
+					}
+				} else if (key.StartsWith("LocoTractive_")) {
+					string id = key.Substring("LocoTractive_".Length);
+					var loco = m_locoEditor.GetAllLocomotives().FirstOrDefault(l => l.Id.ToString() == id);
+					if (loco != null) {
+						m_locoEditor.SetFieldFloat(loco, "StartingTractiveEffort", value);
+					}
+				} else if (key.StartsWith("LocoBraking_")) {
+					string id = key.Substring("LocoBraking_".Length);
+					var loco = m_locoEditor.GetAllLocomotives().FirstOrDefault(l => l.Id.ToString() == id);
+					if (loco != null) {
+						m_locoEditor.SetFieldFloat(loco, "BrakingForceKn", value);
+					}
+				}
+			} catch (Exception ex) {
+				Log.Warning("Failed to apply float option " + key + ": " + ex.Message);
 			}
 		}
 	}
