@@ -17,14 +17,17 @@ namespace ResourceQuantityEditor {
 			UpdateGlobalMaxSpeedLimit();
 			OverwriteSafetyMargins();
 			OverwritePushPullPenalties();
+			OverwriteAerodynamics();
 		}
 
 		private static void OverwriteSafetyMargins() {
 			try {
 				SetStaticField(typeof(Train), "BRAKING_SAFETY_MARGIN", (Fix32)1.00f);
 				SetStaticField(typeof(Train), "FOLLOWING_SAFETY_MARGIN", (Fix32)0.20f);
-				SetStaticField(typeof(Train), "RESERVE_EXTRA_FACTOR_MULT", (Fix32)1.30f);
-				Mafi.Log.Info("LocomotiveEditorService: Successfully set train safety margins to tight values.");
+				// Increase alignment speed so trains don't crawl at 54 km/h near stations
+				RelTile1f highAlignmentSpeed = RelTile1fExtensions.Kmh(200.0);
+				SetStaticField(typeof(Train), "MAX_ALIGNMENT_SPEED", highAlignmentSpeed);
+				Mafi.Log.Info("LocomotiveEditorService: Successfully set train safety margins and alignment speed.");
 			} catch (Exception ex) {
 				Mafi.Log.Error("LocomotiveEditorService: Failed to overwrite safety margins: " + ex);
 			}
@@ -37,6 +40,21 @@ namespace ResourceQuantityEditor {
 				Mafi.Log.Info("LocomotiveEditorService: Successfully disabled push/pull train penalties.");
 			} catch (Exception ex) {
 				Mafi.Log.Error("LocomotiveEditorService: Failed to overwrite push/pull penalties: " + ex);
+			}
+		}
+
+		/// <summary>
+		/// Reduce air drag so that physics simulation does not cap speed below the desired maximum.
+		/// AIR_DRAG_FUN_MULTIPLIER defaults to 50% — lowering it to near-zero removes the
+		/// aerodynamic terminal velocity that otherwise limits trains to ~150 km/h.
+		/// </summary>
+		private static void OverwriteAerodynamics() {
+			try {
+				SetStaticField(typeof(TrainStaticData), "AIR_DRAG_FUN_MULTIPLIER", Percent.FromRatio(5, 100));
+				SetStaticField(typeof(TrainStaticData), "ACCELERATION_FUN_FACTOR", Percent.FromRatio(500, 100));
+				Mafi.Log.Info("LocomotiveEditorService: Successfully reduced air drag and boosted acceleration.");
+			} catch (Exception ex) {
+				Mafi.Log.Error("LocomotiveEditorService: Failed to overwrite aerodynamics: " + ex);
 			}
 		}
 
@@ -60,9 +78,72 @@ namespace ResourceQuantityEditor {
 			}
 		}
 
+		private void RobustSetField(object obj, string baseName, float value) {
+			Type t = obj.GetType();
+			FieldInfo f = FindFieldDeep(t, baseName);
+			if (f == null) f = FindFieldDeep(t, "<" + baseName + ">k__BackingField");
+			if (f == null) f = FindFieldDeep(t, baseName + "Kn");
+			if (f == null) f = FindFieldDeep(t, "<" + baseName + "Kn>k__BackingField");
+			if (f == null) f = FindFieldDeep(t, baseName + "Kw");
+			if (f == null) f = FindFieldDeep(t, "<" + baseName + "Kw>k__BackingField");
+			if (f != null) {
+				object converted = ConvertFromFloat(value, f.FieldType);
+				f.SetValue(obj, converted);
+			}
+		}
+
+		private float RobustGetField(object obj, string baseName, float defaultVal = 0f) {
+			Type t = obj.GetType();
+			FieldInfo f = FindFieldDeep(t, baseName);
+			if (f == null) f = FindFieldDeep(t, "<" + baseName + ">k__BackingField");
+			if (f == null) f = FindFieldDeep(t, baseName + "Kn");
+			if (f == null) f = FindFieldDeep(t, "<" + baseName + "Kn>k__BackingField");
+			if (f == null) f = FindFieldDeep(t, baseName + "Kw");
+			if (f == null) f = FindFieldDeep(t, "<" + baseName + "Kw>k__BackingField");
+			if (f != null) {
+				var val = f.GetValue(obj);
+				if (val != null) {
+					return ConvertToFloat(val);
+				}
+			}
+			return defaultVal;
+		}
+
 		public void UpdateGlobalMaxSpeedLimit() {
 			try {
 				float maxSpeed = 144f;
+				
+				// Apply 200 km/h and massive boosts to ALL TrainCarProtos (Locomotives + Wagons)
+				foreach (var proto in m_protosDb.All<Proto>()) {
+					if (proto is TrainCarBaseProto carProto) {
+						// 1. Force MaxSpeed to 200 km/h
+						float speed = RobustGetField(carProto, "MaxSpeed");
+						if (speed < 200f) {
+							RobustSetField(carProto, "MaxSpeed", 200f);
+						}
+						
+						// 2. Boost Brakes so loaded trains can stop
+						float brake = RobustGetField(carProto, "BrakingForceKn");
+						if (brake > 0f && brake < 500f) {
+							RobustSetField(carProto, "BrakingForceKn", brake * 50f);
+						}
+						
+						// 3. Boost Power/Traction (for locomotives)
+						if (carProto is LocomotiveProto locoProto) {
+							float power = RobustGetField(locoProto, "EnginePowerKw");
+							if (power > 0f && power < 10000f) {
+								RobustSetField(locoProto, "EnginePowerKw", power * 50f);
+							}
+							
+							float tractive = RobustGetField(locoProto, "StartingTractiveEffort");
+							if (tractive > 0f && tractive < 1000f) {
+								RobustSetField(locoProto, "StartingTractiveEffort", tractive * 50f);
+							}
+						}
+					}
+				}
+
+				// Track global max speed
 				foreach (var loco in m_protosDb.All<LocomotiveProto>()) {
 					if (loco.GetType() == typeof(LocomotiveProto)) {
 						float speed = GetMaxSpeedKmh(loco);
@@ -71,9 +152,42 @@ namespace ResourceQuantityEditor {
 						}
 					}
 				}
+
 				OverwriteMaxSpeedLimit(maxSpeed);
+				UpdateTrackSpeedLimits(maxSpeed);
 			} catch (Exception ex) {
 				Mafi.Log.Error("Failed to update global max speed: " + ex);
+			}
+		}
+
+		/// <summary>
+		/// Overwrite MaxSpeedTilesPerTick on every track and level-crossing prototype in the DB
+		/// so that track geometry never limits train speed below the target.
+		/// Uses FindFieldDeep to traverse the full inheritance chain.
+		/// </summary>
+		public void UpdateTrackSpeedLimits(float maxSpeedKmh) {
+			try {
+				RelTile1f targetSpeedTpt = RelTile1fExtensions.Kmh((double)maxSpeedKmh);
+				int count = 0;
+
+				var tracks = m_protosDb.All<Proto>().OfType<IEntityWithTrainTrackBaseProto>().ToList();
+
+				foreach (var proto in tracks) {
+
+
+					FieldInfo maxSpeedField = FindFieldDeep(proto.GetType(), "<MaxSpeedTilesPerTick>k__BackingField");
+					if (maxSpeedField != null) {
+						RelTile1f currentSpeed = (RelTile1f)maxSpeedField.GetValue(proto);
+						float currentSpeedKmh = currentSpeed.SpeedTilesPerTickToKmPerHour().RawValue / 1024f;
+						if (currentSpeedKmh < maxSpeedKmh) {
+							maxSpeedField.SetValue(proto, targetSpeedTpt);
+							count++;
+						}
+					}
+				}
+				Mafi.Log.Info("LocomotiveEditorService: Successfully set " + count + " track speed limits to " + maxSpeedKmh + " km/h");
+			} catch (Exception ex) {
+				Mafi.Log.Error("LocomotiveEditorService: Failed to update track speed limits: " + ex);
 			}
 		}
 
@@ -111,8 +225,11 @@ namespace ResourceQuantityEditor {
 			try {
 				if (m_trainsManager == null || m_trainsManager.Trains == null) return;
 
+				// Re-apply aerodynamics overrides (in case anything reset them)
+				OverwritePushPullPenalties();
+				OverwriteAerodynamics();
+
 				FieldInfo maxSpeedField = typeof(Train).GetField("<MaxSpeed>k__BackingField", BindingFlags.Instance | BindingFlags.NonPublic);
-				FieldInfo resDistField = typeof(Train).GetField("<AttemptedReservationDistance>k__BackingField", BindingFlags.Instance | BindingFlags.NonPublic);
 
 				// TrainStaticData fields
 				FieldInfo tsdMaxSpeedConstField = typeof(TrainStaticData).GetField("MaxSpeedBasedOnConstruction", BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.Public);
@@ -121,6 +238,16 @@ namespace ResourceQuantityEditor {
 				FieldInfo tsdTotalPowerBwdField = typeof(TrainStaticData).GetField("TotalMaxPowerBackwards", BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.Public);
 				FieldInfo tsdStartingTractiveField = typeof(TrainStaticData).GetField("StartingTractiveEffortKn", BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.Public);
 				FieldInfo tsdMaxBrakingField = typeof(TrainStaticData).GetField("MaxBrakingForceKn", BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.Public);
+				FieldInfo tsdAirDragCoeffField = typeof(TrainStaticData).GetField("AirDragCoefficient", BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.Public);
+
+				// Computed speed fields that recomputeSpeeds writes to
+				FieldInfo tsdMaxFwdSpeedField = typeof(TrainStaticData).GetField("MaxForwardsSpeedCombined", BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.Public);
+				FieldInfo tsdMaxBwdSpeedField = typeof(TrainStaticData).GetField("MaxBackwardSpeedCombined", BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.Public);
+				FieldInfo tsdMaxSpeedG0Field = typeof(TrainStaticData).GetField("MaxSpeedAtGrade0", BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.Public);
+				FieldInfo tsdMaxSpeedG0UnrestField = typeof(TrainStaticData).GetField("MaxSpeedAtGrade0Unrestricted", BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.Public);
+				FieldInfo tsdMaxSpeedG12Field = typeof(TrainStaticData).GetField("MaxSpeedAtGrade12", BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.Public);
+				FieldInfo tsdMaxSpeedG25Field = typeof(TrainStaticData).GetField("MaxSpeedAtGrade25", BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.Public);
+				FieldInfo tsdMaxSpeedG0BwdField = typeof(TrainStaticData).GetField("MaxSpeedAtGrade0Backwards", BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.Public);
 
 				MethodInfo recomputeSpeedsMethod = typeof(TrainStaticData).GetMethod("recomputeSpeeds", BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
 
@@ -135,7 +262,7 @@ namespace ResourceQuantityEditor {
 
 					foreach (var car in train.Data.TrainCars) {
 						if (car == null) continue;
-						
+
 						// Speed
 						FieldInfo speedField = FindField(car.GetType(), "MaxSpeed");
 						if (speedField != null) {
@@ -175,28 +302,52 @@ namespace ResourceQuantityEditor {
 					tsdStartingTractiveField?.SetValue(train.Data, totalTractive);
 					tsdMaxBrakingField?.SetValue(train.Data, totalBraking);
 
+					// 2b. Reduce air drag coefficient on each train so physics don't cap speed
+					if (tsdAirDragCoeffField != null) {
+						Fix32 currentDrag = (Fix32)tsdAirDragCoeffField.GetValue(train.Data);
+						Fix32 reducedDrag = currentDrag * (Fix32)0.05f;
+						tsdAirDragCoeffField.SetValue(train.Data, reducedDrag);
+					}
+
 					// 3. Trigger game's recomputeSpeeds to rebuild performance curves
 					recomputeSpeedsMethod?.Invoke(train.Data, null);
 
-					// 4. Update Train instance max speed field
-					if (maxSpeedField != null) {
-						maxSpeedField.SetValue(train, train.Data.MaxSpeedBasedOnConstruction);
-					}
+					// 4. Force-override all computed speed fields to at least our target speed
+					//    recomputeSpeeds may have computed lower values due to residual drag/physics
+					RelTile1f desiredSpeed = maxSpeed;
+					ForceMinSpeed(tsdMaxSpeedConstField, train.Data, desiredSpeed);
+					ForceMinSpeed(tsdMaxFwdSpeedField, train.Data, desiredSpeed);
+					ForceMinSpeed(tsdMaxBwdSpeedField, train.Data, desiredSpeed);
+					ForceMinSpeed(tsdMaxSpeedG0Field, train.Data, desiredSpeed);
+					ForceMinSpeed(tsdMaxSpeedG0UnrestField, train.Data, desiredSpeed);
+					ForceMinSpeed(tsdMaxSpeedG12Field, train.Data, desiredSpeed);
+					ForceMinSpeed(tsdMaxSpeedG25Field, train.Data, desiredSpeed);
+					ForceMinSpeed(tsdMaxSpeedG0BwdField, train.Data, desiredSpeed);
 
-					// 5. Re-calculate attempted reservation distance based on new braking specs
-					if (resDistField != null) {
-						RelTile1f stoppingDistance = train.Data.ComputeStoppingDistanceEstimate(
-							train.Data.MaxSpeedBasedOnConstruction,
-							train.Data.MaxBrakingForceKn,
-							train.Data.MassTonsWhenFull);
-						RelTile1f resDist = stoppingDistance * (Fix32)1.30f;
-						resDistField.SetValue(train, resDist);
-					}
+				// 5. Update Train instance max speed field
+				if (maxSpeedField != null) {
+					maxSpeedField.SetValue(train, desiredSpeed);
 				}
-				Mafi.Log.Info("LocomotiveEditorService: Successfully updated " + m_trainsManager.Trains.Count + " active trains in-place.");
+			}
+			Mafi.Log.Info("LocomotiveEditorService: Successfully updated " + m_trainsManager.Trains.Count + " active trains in-place.");
 			} catch (Exception ex) {
 				Mafi.Log.Error("LocomotiveEditorService: Failed to update active trains: " + ex);
 			}
+		}
+
+		/// <summary>
+		/// Ensures the given RelTile1f field on target is at least minSpeed.
+		/// </summary>
+		private static void ForceMinSpeed(FieldInfo field, object target, RelTile1f minSpeed) {
+			if (field == null) return;
+			try {
+				RelTile1f current = (RelTile1f)field.GetValue(target);
+				float currentKmh = current.SpeedTilesPerTickToKmPerHour().RawValue / 1024f;
+				float minKmh = minSpeed.SpeedTilesPerTickToKmPerHour().RawValue / 1024f;
+				if (currentKmh < minKmh) {
+					field.SetValue(target, minSpeed);
+				}
+			} catch {}
 		}
 
 		public float GetMaxSpeedKmh(LocomotiveProto proto) {
@@ -241,11 +392,24 @@ namespace ResourceQuantityEditor {
 			RelTile1f readBack = (RelTile1f)field.GetValue(proto);
 			Fix32 readKmh = readBack.SpeedTilesPerTickToKmPerHour();
 			float actual = readKmh.RawValue / 1024f;
-			
+
 			// Dynamically update global Train.MAX_SPEED based on all locomotive configurations
 			UpdateGlobalMaxSpeedLimit();
-			
+
 			return Math.Abs(actual - kmh) < 1f;
+		}
+
+		/// <summary>
+		/// Searches for a field traversing the full type hierarchy (not just one level up).
+		/// </summary>
+		public static FieldInfo FindFieldDeep(Type type, string fieldName) {
+			Type current = type;
+			while (current != null) {
+				FieldInfo field = current.GetField(fieldName, BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.DeclaredOnly);
+				if (field != null) return field;
+				current = current.BaseType;
+			}
+			return null;
 		}
 
 		public static FieldInfo FindField(Type type, string fieldName) {
@@ -265,6 +429,15 @@ namespace ResourceQuantityEditor {
 			if (type == typeof(Fix32)) {
 				int raw = ((Fix32)val).RawValue;
 				return raw / 1024f;
+			}
+
+			if (type.Name == "MechPower") {
+				try {
+					FieldInfo field = type.GetField("Value", BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
+					if (field != null) {
+						return Convert.ToSingle(field.GetValue(val));
+					}
+				} catch {}
 			}
 
 			try {
@@ -296,7 +469,7 @@ namespace ResourceQuantityEditor {
 			}
 			string name = targetType.Name;
 			if (name == "RelTile1f") {
-				return Activator.CreateInstance(targetType, new object[] { (Fix32)value });
+				return RelTile1fExtensions.Kmh((double)value);
 			}
 			if (name == "MechPower") {
 				return Activator.CreateInstance(targetType, new object[] { (int)value });

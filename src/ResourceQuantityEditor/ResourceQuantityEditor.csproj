@@ -47,6 +47,7 @@
     <Compile Include="Services\VisualTweaksService.cs" />
 		<Compile Include="Services\OptionsStateService.cs" />
 		<Compile Include="Services\LocomotiveEditorService.cs" />
+		<Compile Include="Patches\TrainReservationPatches.cs" />
 	  </ItemGroup>
 
   <ItemGroup>

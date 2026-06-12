@@ -7,11 +7,15 @@ using Mafi.Collections;
 using Mafi.Core.Game;
 using Mafi.Core.Mods;
 using Mafi.Core.Prototypes;
+using Mafi.Core.Trains;
 using Mafi.Unity.Ui;
 
 namespace ResourceQuantityEditor {
 
 	public sealed class ResourceQuantityEditor : IMod {
+
+		private Harmony _harmony;
+		private ResolveEventHandler _assemblyResolver;
 
 		public ModManifest Manifest { get; private set; }
 		public bool IsUiOnly { get { return false; } }
@@ -36,7 +40,7 @@ namespace ResourceQuantityEditor {
 			}
 
 			// Резолвер на случай, если автоматическая загрузка не сработает
-			AppDomain.CurrentDomain.AssemblyResolve += (sender, args) => {
+			_assemblyResolver = (sender, args) => {
 				string name = new AssemblyName(args.Name).Name;
 				if (name == "0Harmony" || name.Contains("Harmony")) {
 					if (File.Exists(harmonyPath)) {
@@ -45,6 +49,7 @@ namespace ResourceQuantityEditor {
 				}
 				return null;
 			};
+			AppDomain.CurrentDomain.AssemblyResolve += _assemblyResolver;
 			
 			Log.Info("ResourceQuantityEditor: constructed");
 		}
@@ -67,16 +72,68 @@ namespace ResourceQuantityEditor {
 
 		public void EarlyInit(DependencyResolver resolver) {
 			try {
-				// Инициализируем все Harmony патчи разом
-				Harmony harmony = new Harmony("ResourceQuantityEditor");
-				harmony.PatchAll(Assembly.GetExecutingAssembly());
+				_harmony = new Harmony("ResourceQuantityEditor");
+				_harmony.PatchAll(Assembly.GetExecutingAssembly());
 				
-				// Инициализируем остальные патчи (на базе Reflection)
 				UnlimitedDesignationsPatch.Initialize();
+
+				// --- Патчи физики движения поездов ---
+				// SPEED_MODULATION_SPACE_FACTOR: 1.4 → 0.8 (снижаем порог прощупывания)
+				// RESERVE_EXTRA_FACTOR_MULT: 1.5 → 1.0 (убираем лишний множитель резервирования)
+				PatchFix32StaticField("SPEED_MODULATION_SPACE_FACTOR", 0.8f);
+				PatchFix32StaticField("RESERVE_EXTRA_FACTOR_MULT", 1.0f);
 				
 				Log.Info("ResourceQuantityEditor: All patches initialized in EarlyInit");
 			} catch (Exception ex) {
 				Log.Error("ResourceQuantityEditor: Failed to initialize patches: " + ex.Message);
+			}
+		}
+
+		/// <summary>
+		/// Записывает новое значение в статическое readonly Fix32-поле класса Train.
+		/// </summary>
+		private static void PatchFix32StaticField(string fieldName, float targetValue) {
+			try {
+				FieldInfo field = typeof(Train).GetField(
+					fieldName,
+					BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic);
+				if (field == null) {
+					Log.Error("ResourceQuantityEditor: Train." + fieldName + " field not found");
+					return;
+				}
+
+				int newRaw = (int)Math.Round(targetValue * 1024.0);
+
+				object newFix32 = System.Runtime.Serialization.FormatterServices
+					.GetUninitializedObject(field.FieldType);
+				FieldInfo rawField = field.FieldType.GetField(
+					"RawValue",
+					BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
+				if (rawField == null) {
+					Log.Error("ResourceQuantityEditor: Fix32.RawValue field not found");
+					return;
+				}
+				rawField.SetValue(newFix32, newRaw);
+
+				System.Reflection.FieldAttributes attrs = field.Attributes;
+				FieldInfo attrField = typeof(FieldInfo).GetField(
+					"m_fieldAttributes",
+					BindingFlags.NonPublic | BindingFlags.Instance);
+				if (attrField != null) {
+					attrField.SetValue(field, attrs & ~System.Reflection.FieldAttributes.InitOnly);
+					field.SetValue(null, newFix32);
+					attrField.SetValue(field, attrs);
+				} else {
+					field.SetValue(null, newFix32);
+				}
+
+				object readBack = field.GetValue(null);
+				int readRawVal = rawField != null ? (int)rawField.GetValue(readBack) : -1;
+				Log.Info(string.Format(
+					"ResourceQuantityEditor: Train.{0} patched to {1:F4} (raw={2})",
+					fieldName, (readRawVal / 1024.0), readRawVal));
+			} catch (Exception ex) {
+				Log.Error("ResourceQuantityEditor: Failed to patch Train." + fieldName + ": " + ex);
 			}
 		}
 
@@ -120,6 +177,20 @@ namespace ResourceQuantityEditor {
 
 		public void Dispose() {
 			ResourceQuantityEditorUi.Uninstall();
+			try {
+				_harmony?.UnpatchAll("ResourceQuantityEditor");
+			} catch { }
+			try {
+				UnlimitedDesignationsPatch.Unpatch();
+			} catch { }
+			if (_assemblyResolver != null) {
+				AppDomain.CurrentDomain.AssemblyResolve -= _assemblyResolver;
+			}
 		}
+	}
+
+	public static class ModLoader {
+		public static bool IsReloaded;
+		public static System.Collections.Generic.Dictionary<string, object> ReloadedInstances;
 	}
 }

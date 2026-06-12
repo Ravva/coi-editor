@@ -115,5 +115,15 @@ namespace ResourceQuantityEditor
                 // Silently ignore missing fields or version mismatches
             }
         }
+
+        public static void Unpatch()
+        {
+            if (!_initialized) return;
+            SetUnlimitedMining(false);
+            SetUnlimitedTowerArea(false);
+            _initialized = false;
+        }
     }
 }
+
+
