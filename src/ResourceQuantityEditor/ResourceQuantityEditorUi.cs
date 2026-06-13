@@ -1102,8 +1102,32 @@ namespace ResourceQuantityEditor {
 			m_statusField = new TextField()
 				.Text(string.IsNullOrEmpty(m_status) ? "Ready." : m_status)
 				.Readonly(true);
-			status.BodyAdd(new UiComponent[] { m_statusField });
+			Row row = CenteredRow();
+			row.Add(m_statusField);
+			row.Add(ActionButton("Reload DLL", TriggerReload, Button.Warning).Width(120));
+			status.BodyAdd(new UiComponent[] { row });
 			return status;
+		}
+
+		private void TriggerReload() {
+			try {
+				string modDir = System.IO.Path.GetDirectoryName(System.Reflection.Assembly.GetExecutingAssembly().Location);
+				string dllPath = System.IO.Path.Combine(modDir, "ResourceQuantityEditor.dll");
+
+				if (!System.IO.File.Exists(dllPath)) {
+					SetStatus("Error: DLL not found at " + dllPath);
+					return;
+				}
+
+				SetStatus("Reloading DLL...");
+				byte[] assemblyData = System.IO.File.ReadAllBytes(dllPath);
+				System.Reflection.Assembly.Load(assemblyData);
+
+				SetStatus("Reload failed: Assembly.Load returned without reinitializing. Restart game to apply changes.");
+			} catch (Exception ex) {
+				SetStatus("Reload failed: " + ex.Message);
+				Mafi.Log.Error("ModReload: " + ex);
+			}
 		}
 
 		private ButtonText ActionButton(string text, Action action, ButtonVariant variant) {
