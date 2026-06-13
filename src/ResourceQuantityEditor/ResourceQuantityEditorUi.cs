@@ -3,7 +3,6 @@ using System.Linq;
 using Mafi.Collections.ImmutableCollections;
 using Mafi.Core.Products;
 using Mafi.Core.Terrain;
-using Mafi.Core.Trains;
 using Mafi.Localization;
 using Mafi.Unity.Ui;
 using Mafi.Unity.UiToolkit.Component;
@@ -19,7 +18,6 @@ namespace ResourceQuantityEditor {
 		private static TreeRangeRemovalService s_treeRangeRemoval;
 		private static UiContext s_uiContext;
 		private static OptionsStateService s_optionsState;
-		private static LocomotiveEditorService s_locoEditor;
 		private const string ICON_EMPTY = "Assets/Unity/UserInterface/General/Empty128.png";
 		private const string ICON_POPULATION = "Assets/Unity/UserInterface/General/Population.svg";
 		private const string ICON_STORAGE = "Assets/Unity/UserInterface/General/Storage.svg";
@@ -62,48 +60,18 @@ namespace ResourceQuantityEditor {
 		private string m_cargoShipsAmount = "2";
 		private string m_vehicleLimitAmount = "100";
 		private string m_status = "";
-		private string m_locoFilter = "";
-		private bool m_locoFilterWasEntered;
-		private LocomotiveEditState[] m_locoStates = Array.Empty<LocomotiveEditState>();
-
-		private class LocomotiveEditState {
-			public string Speed = "";
-			public string EnginePower = "";
-			public string TractiveEffort = "";
-			public string BrakingForce = "";
-
-			public float OrigSpeed;
-			public float OrigEnginePower;
-			public float OrigTractiveEffort;
-			public float OrigBrakingForce;
-
-			public bool HasChanges =>
-				Speed != FmtSpeed(OrigSpeed) ||
-				EnginePower != FmtPower(OrigEnginePower) ||
-				TractiveEffort != FmtForce(OrigTractiveEffort) ||
-				BrakingForce != FmtForce(OrigBrakingForce);
-		}
-
-		private static readonly (string Field, string Header, Func<float, string> Format)[] LocoFieldMeta = {
-			("MaxSpeed",              "Speed\nkm/h", v => FmtSpeed(v)),
-			("EnginePowerKw",         "Power\nkW",  v => FmtPower(v)),
-			("StartingTractiveEffort","Tractive\nkN", v => FmtForce(v)),
-			("BrakingForceKn",        "Braking\nkN", v => FmtForce(v)),
-		};
 
 		public static void Install(
 			GlobalResourceEditorService globalEditor,
 			SandboxFeatureService sandboxFeatures,
 			TreeRangeRemovalService treeRangeRemoval,
 			UiContext uiContext,
-			OptionsStateService optionsState,
-			LocomotiveEditorService locoEditor) {
+			OptionsStateService optionsState) {
 			s_globalEditor = globalEditor;
 			s_sandboxFeatures = sandboxFeatures;
 			s_treeRangeRemoval = treeRangeRemoval;
 			s_uiContext = uiContext;
 			s_optionsState = optionsState;
-			s_locoEditor = locoEditor;
 			if (s_instance != null) {
 				return;
 			}
@@ -179,8 +147,7 @@ namespace ResourceQuantityEditor {
 			tabs.Add(L("Sandbox"), null, BuildSandboxTab(), Scroll.No);
 			tabs.Add(L("Settlement"), null, BuildSettlementTab(), Scroll.No);
 			tabs.Add(L("Logistics"), null, BuildLogisticsTab(), Scroll.No);
-			tabs.Add(L("Locomotives"), null, BuildLocomotivesTab(), Scroll.No);
-			if (m_tab > 5) {
+			if (m_tab > 4) {
 				m_tab = 0;
 			}
 			tabs.SwitchToTab(m_tab);
@@ -783,237 +750,6 @@ namespace ResourceQuantityEditor {
 			return panel;
 		}
 
-		/* ─── Locomotives Tab ─── */
-
-		private UiComponent BuildLocomotivesTab() {
-			Column root = new Column(12);
-			try {
-				ScrollColumn scroll = new ScrollColumn().FlexGrow(1);
-				scroll.Add(BuildLocomotivesDeck());
-				root.Add(scroll);
-			} catch (Exception ex) {
-				root.Add(new Label(L("Error loading locomotives: " + ex.Message)));
-				Mafi.Log.Error("LocomotivesTab: " + ex);
-			}
-			return root.FlexGrow(1);
-		}
-
-		private UiComponent BuildLocomotivesDeck() {
-			PanelWithHeader panel = new PanelWithHeader(L("LOCOMOTIVES"));
-			LocomotiveProto[] locos;
-			try {
-				locos = s_locoEditor.GetAllLocomotives();
-			} catch (Exception ex) {
-				panel.BodyAdd(new UiComponent[] { new Label(L("Failed to load locomotive data: " + ex.Message)) });
-				Mafi.Log.Error("LocomotivesDeck: " + ex);
-				return panel;
-			}
-			InitLocoStates(locos);
-
-			// Toolbar: icon + actions
-			Row toolbar = CenteredRow();
-			toolbar.Add(new Icon(ICON_WRENCH).Size(24));
-			toolbar.Add(new Label(L("Locomotive editor")).IncFontSize().Width(200));
-			toolbar.Add(ActionButton("Apply all", () => ApplyAllLocomotives(locos), Button.Primary).Width(130));
-			toolbar.Add(ActionButton("Reset all", () => ResetAllLocomotives(locos), Button.Warning).Width(130));
-
-			TextField filterField = new TextField()
-				.Text(m_locoFilter)
-				.OnValueChanged(delegate(string x) {
-					m_locoFilterWasEntered = true;
-					m_locoFilter = x;
-				}, isDelayed: false)
-				.Width(200);
-			if (!m_locoFilterWasEntered) {
-				filterField.Placeholder(L("filter by name or id"));
-			}
-			toolbar.Add(filterField);
-			FinishCenteredRow(toolbar);
-
-			// Table header
-			Column list = new Column(4);
-			BuildLocoHeader(list);
-
-			// Rows
-			for (int i = 0; i < locos.Length; i++) {
-				if (!MatchesLocoFilter(locos[i])) {
-					continue;
-				}
-				try {
-					BuildLocoRow(list, locos[i], i);
-				} catch (Exception ex) {
-					list.Add(new Label(L("Error: " + locos[i].Id + " — " + ex.Message)));
-					Mafi.Log.Error("Locomotives row " + i + ": " + ex);
-				}
-			}
-
-			ScrollColumn scroller = new ScrollColumn();
-			scroller.ScrollerAlwaysVisible();
-			scroller.Height(480);
-			scroller.Add(list);
-			panel.BodyAdd(new UiComponent[] { toolbar, scroller, new Label(L("Note: changes apply only to newly built locomotives. Speed change auto-scales power/tractive effort.")).TinyFontSize() });
-			return panel;
-		}
-
-		private bool MatchesLocoFilter(LocomotiveProto loco) {
-			if (string.IsNullOrEmpty(m_locoFilter)) {
-				return true;
-			}
-			string filter = m_locoFilter.Trim();
-			return loco.Id.ToString().IndexOf(filter, StringComparison.OrdinalIgnoreCase) >= 0
-				|| loco.Strings.Name.TranslatedString.IndexOf(filter, StringComparison.OrdinalIgnoreCase) >= 0;
-		}
-
-		private void InitLocoStates(LocomotiveProto[] locos) {
-			if (m_locoStates.Length == locos.Length) {
-				return;
-			}
-			m_locoStates = new LocomotiveEditState[locos.Length];
-			for (int i = 0; i < m_locoStates.Length; i++) {
-				m_locoStates[i] = new LocomotiveEditState();
-			}
-		}
-
-		private void LoadLocoValues(LocomotiveProto loco, int index) {
-			LocomotiveEditState s = m_locoStates[index];
-			s.OrigSpeed = s_locoEditor.GetMaxSpeedKmh(loco);
-			s.OrigEnginePower = s_locoEditor.GetFieldFloat(loco, "EnginePowerKw");
-			s.OrigTractiveEffort = s_locoEditor.GetFieldFloat(loco, "StartingTractiveEffort");
-			s.OrigBrakingForce = s_locoEditor.GetFieldFloat(loco, "BrakingForceKn");
-
-			s.Speed = FmtSpeed(s.OrigSpeed);
-			s.EnginePower = FmtPower(s.OrigEnginePower);
-			s.TractiveEffort = FmtForce(s.OrigTractiveEffort);
-			s.BrakingForce = FmtForce(s.OrigBrakingForce);
-		}
-
-		private void BuildLocoHeader(Column list) {
-			Row header = new Row(4);
-			header.Add(new Label(L("Locomotive")).TinyFontSize().Width(220));
-			foreach ((string field, string head, _) in LocoFieldMeta) {
-				header.Add(new Label(L(head)).TinyFontSize().Width(72));
-			}
-			header.Add(new Label(L("")).Width(140));
-			list.Add(header);
-		}
-
-		private void BuildLocoRow(Column list, LocomotiveProto loco, int index) {
-			LocomotiveEditState state = m_locoStates[index];
-			if (string.IsNullOrEmpty(state.Speed)) {
-				LoadLocoValues(loco, index);
-			}
-
-			bool changed = state.HasChanges;
-
-			Row row = new Row(4);
-			row.Add(new Label(L(loco.Strings.Name.TranslatedString)).Width(220));
-
-			AddLocoField(row, state.Speed,          val => state.Speed = val);
-			AddLocoField(row, state.EnginePower,    val => state.EnginePower = val);
-			AddLocoField(row, state.TractiveEffort, val => state.TractiveEffort = val);
-			AddLocoField(row, state.BrakingForce,   val => state.BrakingForce = val);
-
-			ButtonVariant applyVariant = changed ? Button.Warning : Button.General;
-			row.Add(ActionButton("Apply", () => ApplyLocomotive(loco, index), applyVariant).Width(68));
-			row.Add(ActionButton("Reset", () => ResetLocomotive(loco, index), Button.Area).Width(68));
-			list.Add(row);
-		}
-
-		private static void AddLocoField(Row row, string currentVal, Action<string> setter) {
-			row.Add(new TextField()
-				.Text(currentVal)
-				.CharLimit(8)
-				.OnValueChanged(setter, isDelayed: false)
-				.Width(70));
-		}
-
-		private void ApplyLocomotive(LocomotiveProto loco, int index) {
-			LocomotiveEditState state = m_locoStates[index];
-			RunSafely(() => {
-				float targetSpeed = ParseFloat(state.Speed);
-				float targetPower = ParseFloat(state.EnginePower);
-				float targetTractive = ParseFloat(state.TractiveEffort);
-				float targetBraking = ParseFloat(state.BrakingForce);
-
-				bool speedChanged = state.OrigSpeed > 0f && Math.Abs(targetSpeed - state.OrigSpeed) > 0.5f;
-				if (speedChanged) {
-					float factor = targetSpeed / state.OrigSpeed;
-					if (Math.Abs(targetPower - state.OrigEnginePower) < 0.5f) {
-						targetPower = state.OrigEnginePower * factor;
-					}
-					if (Math.Abs(targetTractive - state.OrigTractiveEffort) < 0.5f) {
-						targetTractive = state.OrigTractiveEffort * factor;
-					}
-				}
-
-				bool speedOk = s_locoEditor.SetMaxSpeedKmh(loco, targetSpeed);
-				bool powerOk = s_locoEditor.SetFieldFloat(loco, "EnginePowerKw", targetPower);
-				bool tractiveOk = s_locoEditor.SetFieldFloat(loco, "StartingTractiveEffort", targetTractive);
-				bool brakingOk = s_locoEditor.SetFieldFloat(loco, "BrakingForceKn", targetBraking);
-
-				s_optionsState.SaveCurrentState();
-				s_locoEditor.UpdateActiveTrains();
-				LoadLocoValues(loco, index);
-
-				string verify = string.Format("S:{0} P:{1} T:{2} B:{3}",
-					speedOk ? "OK" : "FAIL",
-					powerOk ? "OK" : "FAIL",
-					tractiveOk ? "OK" : "FAIL",
-					brakingOk ? "OK" : "FAIL");
-
-				SetStatus(string.Format("Applied {0}: Speed {1:F0}->{2:F0} Power {3:F0}->{4:F0} Tractive {5:F0}->{6:F0} Braking {7:F0}->{8:F0} [{9}]",
-					loco.Strings.Name,
-					targetSpeed, state.OrigSpeed,
-					targetPower, state.OrigEnginePower,
-					targetTractive, state.OrigTractiveEffort,
-					targetBraking, state.OrigBrakingForce,
-					verify));
-			});
-			RefreshWindow();
-		}
-
-		private void ApplyAllLocomotives(LocomotiveProto[] locos) {
-			for (int i = 0; i < locos.Length; i++) {
-				if (m_locoStates[i].HasChanges) {
-					ApplyLocomotive(locos[i], i);
-				}
-			}
-			SetStatus("Applied all changed locomotives.");
-		}
-
-		private void ResetLocomotive(LocomotiveProto loco, int index) {
-			LocomotiveEditState state = m_locoStates[index];
-			state.Speed = FmtSpeed(state.OrigSpeed);
-			state.EnginePower = FmtPower(state.OrigEnginePower);
-			state.TractiveEffort = FmtForce(state.OrigTractiveEffort);
-			state.BrakingForce = FmtForce(state.OrigBrakingForce);
-			SetStatus("Reset: " + loco.Strings.Name);
-			RefreshWindow();
-		}
-
-		private void ResetAllLocomotives(LocomotiveProto[] locos) {
-			for (int i = 0; i < locos.Length; i++) {
-				ResetLocomotive(locos[i], i);
-			}
-			SetStatus("Reset all locomotives.");
-		}
-
-		private static string FmtSpeed(float v)  => v.ToString("F0");
-		private static string FmtPower(float v)  => v.ToString("F0");
-		private static string FmtForce(float v)  => v.ToString("F0");
-
-		private static float ParseFloat(string value) {
-			if (string.IsNullOrEmpty(value)) {
-				return 0f;
-			}
-			float result;
-			if (float.TryParse(value, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out result)) {
-				return result;
-			}
-			return 0f;
-		}
-
-		/* ─── end Locomotives Tab ─── */
 
 		private UiComponent BuildSandboxPopulationDeck() {
 			PanelWithHeader panel = new PanelWithHeader(L("POPULATION"));
@@ -1102,32 +838,8 @@ namespace ResourceQuantityEditor {
 			m_statusField = new TextField()
 				.Text(string.IsNullOrEmpty(m_status) ? "Ready." : m_status)
 				.Readonly(true);
-			Row row = CenteredRow();
-			row.Add(m_statusField);
-			row.Add(ActionButton("Reload DLL", TriggerReload, Button.Warning).Width(120));
-			status.BodyAdd(new UiComponent[] { row });
+			status.BodyAdd(new UiComponent[] { m_statusField });
 			return status;
-		}
-
-		private void TriggerReload() {
-			try {
-				string modDir = System.IO.Path.GetDirectoryName(System.Reflection.Assembly.GetExecutingAssembly().Location);
-				string dllPath = System.IO.Path.Combine(modDir, "ResourceQuantityEditor.dll");
-
-				if (!System.IO.File.Exists(dllPath)) {
-					SetStatus("Error: DLL not found at " + dllPath);
-					return;
-				}
-
-				SetStatus("Reloading DLL...");
-				byte[] assemblyData = System.IO.File.ReadAllBytes(dllPath);
-				System.Reflection.Assembly.Load(assemblyData);
-
-				SetStatus("Reload failed: Assembly.Load returned without reinitializing. Restart game to apply changes.");
-			} catch (Exception ex) {
-				SetStatus("Reload failed: " + ex.Message);
-				Mafi.Log.Error("ModReload: " + ex);
-			}
 		}
 
 		private ButtonText ActionButton(string text, Action action, ButtonVariant variant) {

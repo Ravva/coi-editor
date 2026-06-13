@@ -7,7 +7,6 @@ using Mafi.Collections;
 using Mafi.Core.Game;
 using Mafi.Core.Mods;
 using Mafi.Core.Prototypes;
-using Mafi.Core.Trains;
 using Mafi.Unity.Ui;
 
 namespace ResourceQuantityEditor {
@@ -67,7 +66,6 @@ namespace ResourceQuantityEditor {
 			depBuilder.RegisterDependency<TreeRangeRemovalService>().AsSelf();
 			depBuilder.RegisterDependency<VisualTweaksService>().AsSelf();
 			depBuilder.RegisterDependency<OptionsStateService>().AsSelf();
-			depBuilder.RegisterDependency<LocomotiveEditorService>().AsSelf();
 		}
 
 		public void EarlyInit(DependencyResolver resolver) {
@@ -76,13 +74,6 @@ namespace ResourceQuantityEditor {
 				_harmony.PatchAll(Assembly.GetExecutingAssembly());
 				
 				UnlimitedDesignationsPatch.Initialize();
-
-				// --- Патчи физики движения поездов ---
-				// RESERVE_EXTRA_FACTOR_MULT: 1.5 → 0.5 (уменьшаем резервирование чтобы не оборачивалось на кольцах)
-				// SPEED_MODULATION_SPACE_FACTOR: 1.4 → 0.3 (чтобы не было прощупывания при малом резерве)
-				// Баланс: RESERVE=0.5 даёт freeSpace ≈ 0.5×BD, порог прощупывания = 0.3×BD → 0.5 > 0.3, прощупывания нет
-				PatchFix32StaticField("SPEED_MODULATION_SPACE_FACTOR", 0.3f);
-				PatchFix32StaticField("RESERVE_EXTRA_FACTOR_MULT", 0.5f);
 				
 				Log.Info("ResourceQuantityEditor: All patches initialized in EarlyInit");
 			} catch (Exception ex) {
@@ -90,66 +81,18 @@ namespace ResourceQuantityEditor {
 			}
 		}
 
-		/// <summary>
-		/// Записывает новое значение в статическое readonly Fix32-поле класса Train.
-		/// </summary>
-		private static void PatchFix32StaticField(string fieldName, float targetValue) {
-			try {
-				FieldInfo field = typeof(Train).GetField(
-					fieldName,
-					BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic);
-				if (field == null) {
-					Log.Error("ResourceQuantityEditor: Train." + fieldName + " field not found");
-					return;
-				}
 
-				int newRaw = (int)Math.Round(targetValue * 1024.0);
-
-				object newFix32 = System.Runtime.Serialization.FormatterServices
-					.GetUninitializedObject(field.FieldType);
-				FieldInfo rawField = field.FieldType.GetField(
-					"RawValue",
-					BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
-				if (rawField == null) {
-					Log.Error("ResourceQuantityEditor: Fix32.RawValue field not found");
-					return;
-				}
-				rawField.SetValue(newFix32, newRaw);
-
-				System.Reflection.FieldAttributes attrs = field.Attributes;
-				FieldInfo attrField = typeof(FieldInfo).GetField(
-					"m_fieldAttributes",
-					BindingFlags.NonPublic | BindingFlags.Instance);
-				if (attrField != null) {
-					attrField.SetValue(field, attrs & ~System.Reflection.FieldAttributes.InitOnly);
-					field.SetValue(null, newFix32);
-					attrField.SetValue(field, attrs);
-				} else {
-					field.SetValue(null, newFix32);
-				}
-
-				object readBack = field.GetValue(null);
-				int readRawVal = rawField != null ? (int)rawField.GetValue(readBack) : -1;
-				Log.Info(string.Format(
-					"ResourceQuantityEditor: Train.{0} patched to {1:F4} (raw={2})",
-					fieldName, (readRawVal / 1024.0), readRawVal));
-			} catch (Exception ex) {
-				Log.Error("ResourceQuantityEditor: Failed to patch Train." + fieldName + ": " + ex);
-			}
-		}
 
 		public void Initialize(DependencyResolver resolver, bool gameWasLoaded) {
 			SandboxFeatureService sandboxFeatures = resolver.Resolve<SandboxFeatureService>();
 			OptionsStateService optionsState = resolver.Resolve<OptionsStateService>();
-			LocomotiveEditorService locoEditor = resolver.Resolve<LocomotiveEditorService>();
 			
 			ResourceQuantityEditorUi.Install(
 				resolver.Resolve<GlobalResourceEditorService>(),
 				sandboxFeatures,
 				resolver.Resolve<TreeRangeRemovalService>(),
 				resolver.Resolve<UiContext>(),
-				optionsState,
-				locoEditor);
+				optionsState);
 			
 			// Автоматически загружаем сохраненные опции при инициализации мода
 			// Загружаем всегда, когда есть сохраненный файл (и при новой игре, и при загрузке)
@@ -164,13 +107,6 @@ namespace ResourceQuantityEditor {
 				Log.Info("ResourceQuantityEditor: No saved options state found, using defaults.");
 			}
 
-			// Update active trains once on load to propagate modified speed limits to existing trains
-			try {
-				locoEditor.UpdateActiveTrains();
-				Log.Info("ResourceQuantityEditor: Successfully auto-updated active trains on mod initialization");
-			} catch (Exception ex) {
-				Log.Error("ResourceQuantityEditor: Failed to auto-update active trains: " + ex.Message);
-			}
 		}
 
 		public void MigrateJsonConfig(VersionSlim savedVersion, Dict<string, object> savedValues) {
