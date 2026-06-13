@@ -78,10 +78,11 @@ namespace ResourceQuantityEditor {
 				UnlimitedDesignationsPatch.Initialize();
 
 				// --- Патчи физики движения поездов ---
-				// SPEED_MODULATION_SPACE_FACTOR: 1.4 → 0.8 (снижаем порог прощупывания)
-				// RESERVE_EXTRA_FACTOR_MULT: 1.5 → 1.0 (убираем лишний множитель резервирования)
-				PatchFix32StaticField("SPEED_MODULATION_SPACE_FACTOR", 0.8f);
-				PatchFix32StaticField("RESERVE_EXTRA_FACTOR_MULT", 1.0f);
+				// RESERVE_EXTRA_FACTOR_MULT: 1.5 → 0.5 (уменьшаем резервирование чтобы не оборачивалось на кольцах)
+				// SPEED_MODULATION_SPACE_FACTOR: 1.4 → 0.3 (чтобы не было прощупывания при малом резерве)
+				// Баланс: RESERVE=0.5 даёт freeSpace ≈ 0.5×BD, порог прощупывания = 0.3×BD → 0.5 > 0.3, прощупывания нет
+				PatchFix32StaticField("SPEED_MODULATION_SPACE_FACTOR", 0.3f);
+				PatchFix32StaticField("RESERVE_EXTRA_FACTOR_MULT", 0.5f);
 				
 				Log.Info("ResourceQuantityEditor: All patches initialized in EarlyInit");
 			} catch (Exception ex) {
