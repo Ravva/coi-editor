@@ -1,5 +1,6 @@
 using System;
 using System.Linq;
+using Mafi;
 using Mafi.Collections.ImmutableCollections;
 using Mafi.Core.Products;
 using Mafi.Core.Terrain;
@@ -18,6 +19,7 @@ namespace ResourceQuantityEditor {
 		private static TreeRangeRemovalService s_treeRangeRemoval;
 		private static UiContext s_uiContext;
 		private static OptionsStateService s_optionsState;
+		private static DependencyResolver s_resolver;
 		private const string ICON_EMPTY = "Assets/Unity/UserInterface/General/Empty128.png";
 		private const string ICON_POPULATION = "Assets/Unity/UserInterface/General/Population.svg";
 		private const string ICON_STORAGE = "Assets/Unity/UserInterface/General/Storage.svg";
@@ -66,12 +68,14 @@ namespace ResourceQuantityEditor {
 			SandboxFeatureService sandboxFeatures,
 			TreeRangeRemovalService treeRangeRemoval,
 			UiContext uiContext,
-			OptionsStateService optionsState) {
+			OptionsStateService optionsState,
+			DependencyResolver resolver) {
 			s_globalEditor = globalEditor;
 			s_sandboxFeatures = sandboxFeatures;
 			s_treeRangeRemoval = treeRangeRemoval;
 			s_uiContext = uiContext;
 			s_optionsState = optionsState;
+			s_resolver = resolver;
 			if (s_instance != null) {
 				return;
 			}
@@ -725,6 +729,7 @@ namespace ResourceQuantityEditor {
 			
 			Column col2 = new Column(8);
 			col2.Add(SandboxToggle("Instant cargo ships", s_sandboxFeatures.InstantCargoShips, () => s_sandboxFeatures.SetInstantCargoShips(!s_sandboxFeatures.InstantCargoShips)));
+			col2.Add(SandboxToggle("10x Trains Power", s_optionsState.IsTrainsPowerBoosted10x, () => ToggleTrainsPowerBoost()));
 			grid.Add(col1.FlexGrow(1));
 			grid.Add(col2.FlexGrow(1));
 
@@ -915,6 +920,14 @@ namespace ResourceQuantityEditor {
 				return;
 			}
 			RunSandboxCommand(() => s_sandboxFeatures.SetCurrentWeatherIntensity(sun, rain));
+		}
+
+		private string ToggleTrainsPowerBoost() {
+			s_optionsState.IsTrainsPowerBoosted10x = !s_optionsState.IsTrainsPowerBoosted10x;
+			TrainPowerBooster.UpdatePowerBoost(s_resolver, s_optionsState.IsTrainsPowerBoosted10x);
+			s_optionsState.SaveCurrentState();
+			RefreshWindow();
+			return s_optionsState.IsTrainsPowerBoosted10x ? "10x Trains Power enabled." : "10x Trains Power disabled.";
 		}
 
 		private void RunAddCargoShips() {

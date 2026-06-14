@@ -8,6 +8,7 @@ namespace ResourceQuantityEditor {
 	public sealed class OptionsStateService {
 		private readonly SandboxFeatureService m_sandboxFeatures;
 		private readonly string m_saveFilePath;
+		public bool IsTrainsPowerBoosted10x;
 
 		public OptionsStateService(SandboxFeatureService sandboxFeatures) {
 			m_sandboxFeatures = sandboxFeatures;
@@ -66,6 +67,7 @@ namespace ResourceQuantityEditor {
 				sb.AppendLine("IgnoreFuelConsumption=" + m_sandboxFeatures.IgnoreFuelConsumption);
 				sb.AppendLine("UnlimitedVehicleFuel=" + m_sandboxFeatures.UnlimitedVehicleFuel);
 				sb.AppendLine("InstantCargoShips=" + m_sandboxFeatures.InstantCargoShips);
+				sb.AppendLine("IsTrainsPowerBoosted10x=" + IsTrainsPowerBoosted10x);
 				
 				File.WriteAllText(m_saveFilePath, sb.ToString());
 				return "Options state saved to " + m_saveFilePath;
@@ -244,6 +246,9 @@ namespace ResourceQuantityEditor {
 						break;
 					case "InstantCargoShips":
 						m_sandboxFeatures.SetInstantCargoShips(value);
+						break;
+					case "IsTrainsPowerBoosted10x":
+						IsTrainsPowerBoosted10x = value;
 						break;
 				}
 			} catch (Exception ex) {
